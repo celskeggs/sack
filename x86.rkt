@@ -2,11 +2,11 @@
 
 (require "core.rkt")
 
-(provide x86-register-allocation x86-transform x86-asm-write)
+(provide x86-register-allocation x86-transform x86-asm-write-flat x86-asm-flatten x86-asm-add-mitigation)
 
 (define x86-registers
   '(eax ; return register
-    (eax ebx ecx edx ebp esi edi))) ; all general-purpose registers
+    (eax ebx ecx edx esi edi))) ; all general-purpose registers
 
 (define x86-output-prerules `(
                               (()
@@ -28,7 +28,7 @@
                                (push r))
                               ((r n)
                                (reg r (arg n))
-                               (mov r (mem esp ,(lambda (r n) (* (+ n 1) 4)))))
+                               (mov r (mem ebp ,(lambda (r n) (* (+ n 2) 4)))))
                               ((r)
                                (reg r (reg r))
                                (seq))
@@ -40,7 +40,13 @@
                                (seq
                                 (cmp ri (dword cst))
                                 (setbe (reg-low-byte ro))
-                                (movzbl ro (reg-low-byte ro))))
+                                (movzx ro (reg-low-byte ro))))
+                              ((ro ra rb)
+                               (reg ro (<= (reg ra) (reg rb)))
+                               (seq
+                                (cmp ra rb)
+                                (setbe (reg-low-byte ro))
+                                (movzx ro (reg-low-byte ro))))
                               ((r cst)
                                (reg r (+ (reg r) (const cst u4)))
                                (add r (dword cst)))
@@ -50,14 +56,25 @@
                               ((ro ri)
                                (reg ro (+ (reg ri) (reg ro)))
                                (add ro ri))
-                              ((r cst)
-                               (reg r (- (reg r) (const cst u4)))
-                               (sub r (dword cst)))
                               ((ro ri cst)
                                (reg ro (+ (reg ri) (const cst u4)))
                                (seq
                                 (mov ro ri)
                                 (add ro (dword cst))))
+                              ((r cst)
+                               (reg r (- (reg r) (const cst u4)))
+                               (sub r (dword cst)))
+                              ((ro ri)
+                               (reg ro (- (reg ro) (reg ri)))
+                               (sub ro ri))
+                              ((ro ri)
+                               (reg ro (- (reg ri) (reg ro)))
+                               (sub ro ri))
+                              ((ro ri cst)
+                               (reg ro (- (reg ri) (const cst u4)))
+                               (seq
+                                (mov ro ri)
+                                (sub ro (dword cst))))
                               (()
                                (reg-low-byte eax)
                                al)
@@ -74,7 +91,7 @@
                                (return (reg eax))
                                (ret))
                               ))
-(define x86-output '(((label x) x ":")
+(define x86-output '(((label x) "global " x "\n" x ":")
                      ((local x) ".lab" x ":")
                      ((mov dst src) "  mov " dst ", " src)
                      ((cmp a b) "  cmp " a ", " b)
@@ -85,7 +102,8 @@
                      ((je tgt) "  je " ".lab" tgt)
                      ((jne tgt) "  jne " ".lab" tgt)
                      ((jmp tgt) "  jmp " ".lab" tgt)
-                     ((ret) "  ret")
+                     ((ret) "  jmp .labexit")
+                     ((ret-real) "  ret")
                      ((add dst src) "  add " dst ", " src)
                      ((sub dst src) "  sub " dst ", " src)
                      ((push val) "  push " val)
@@ -95,7 +113,7 @@
                      ((mem x p) "[" x "+" p "]")
                      ((dword x) "dword " x)
                      ((setbe x) "  setbe " x)
-                     ((movzbl dst src) "  movzbl " dst ", " src)
+                     ((movzx dst src) "  movzx " dst ", " src)
                      ))
 
 ; modifiable: eax, ecx, edx
@@ -107,5 +125,24 @@
 (define (x86-transform code)
   (tree-transform code x86-output-prerules))
 
-(define (x86-asm-write code)
-  (asm-write x86-output code))
+(define (x86-asm-flatten code)
+  (flatten-labels code))
+
+(define (x86-asm-write-flat code)
+  (asm-write-flat x86-output code))
+
+(define (mitigate reg)
+  (list 'push reg))
+
+(define (unmitigate reg)
+  (list 'pop reg))
+
+(define (x86-asm-add-mitigation regs code)
+  (append (list (car code)) ; function header
+          (list '(push ebp) '(mov ebp esp))
+          (map mitigate regs)
+          (cdr code)
+          (list (list 'local "exit"))
+          (map unmitigate (reverse regs))
+          (list '(pop ebp))
+          (list (list 'ret-real))))

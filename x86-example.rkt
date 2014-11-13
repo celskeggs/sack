@@ -1,16 +1,17 @@
 #lang racket
 
+(require "itemizer.rkt")
 (require "x86.rkt")
 
 ; Let's start with a simple tree that we'll get from the parser/front-end generator.
 (define sample '(fib (u4) u4
-                     ((branch (<= (arg 0) (const 1 u4)) ; 0
-                             1 2))
+                     ((branch (<= (arg 0) (const 1 u4)) 1 2))
                      ((return (const 1 u4)))
                      ((return (+ (call fib (- (arg 0) (const 1 u4)))
                                  (call fib (- (arg 0) (const 2 u4))))))))
 
-(define reduced '(fib (u4) u4
+; Not currently used.
+(define reduced-old '(fib (u4) u4
                       ((swr 0 (arg 0))
                        (swr 1 (<= (swr 0) (const 1 u4)))
                        (branch (swr 1) 1 2))
@@ -47,14 +48,15 @@
                                (add eax ecx)
                                (ret))))
 
-; (display (asm-write x86-output x86-simple-near))
-
+sample
+(define reduced (itemize sample))
 reduced
-;(map swr-conflicts (cdddr reduced))
-;(map swr-usage-ranges (cdddr reduced))
-;(map swr-preferences (cdddr reduced))
 (define allocd (x86-register-allocation reduced))
 allocd
-(define medium (x86-transform allocd))
+(define medium (cdr (x86-transform allocd)))
 medium
-(display (x86-asm-write medium))
+(define flat (x86-asm-flatten medium))
+flat
+(define mitigated (x86-asm-add-mitigation (car allocd) flat))
+mitigated
+(display (x86-asm-write-flat mitigated))

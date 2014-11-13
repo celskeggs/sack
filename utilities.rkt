@@ -1,6 +1,6 @@
 #lang racket
 
-(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream)
+(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique)
 
 (define (zip a b)
   (cond ((and (empty? a) (empty? b)) empty)
@@ -18,14 +18,17 @@
 (define (without from remove)
   (filter (lambda (x) (not (member x remove))) from))
 
+(define (suffix seq end)
+  (append seq (list end)))
+
 (define (trace . args)
   (print args)
   (newline))
 
-(define (assert x)
+(define (assert x failmsg)
   (if x
       x
-      (error "Assertion failed")))
+      (error failmsg)))
 
 (define (find-index-i predicate sequence i)
   (cond ((empty? sequence) (error "No match in list!"))
@@ -53,3 +56,12 @@
         empty
         (cons (cons i (car x)) (enumerate-i (cdr x) (+ i 1)))))
   (enumerate-i x 0))
+
+(define (unique-i seq)
+  (cond ((empty? seq) empty)
+        ((empty? (cdr seq)) seq)
+        ((eq? (first seq) (second seq)) (unique-i (cdr seq)))
+        (else (cons (first seq) (unique-i (cdr seq))))))
+
+(define (unique x)
+  (unique-i (sort x (lambda (a b) (string<? (symbol->string a) (symbol->string b))))))

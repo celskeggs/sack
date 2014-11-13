@@ -2,9 +2,7 @@
 
 (require "utilities.rkt")
 
-(provide register-allocation)
-(provide tree-transform)
-(provide asm-write)
+(provide register-allocation tree-transform asm-write asm-write-flat flatten-labels)
 
 ; SACK! The Semantic Automated Compiler Kit.
 
@@ -143,13 +141,18 @@
           (preferences (swr-preferences block)))
       (let ((result (stream-first (color-solve (without (swr-listing block) (map car base-allocation)) (cadr regs) conflicts preferences base-allocation))))
         ;(pretty-print (list 'result result))
-        (register-allocation-apply block result)))))
+        (cons (map cdr result) (register-allocation-apply block result))))))
 
 (define (register-allocation regs tree)
-  (cons (car tree)
-        (cons (cadr tree)
-              (cons (caddr tree)
-                    (map (curry register-allocation-block regs) (cdddr tree))))))
+  (let* ((allocated (map (curry register-allocation-block regs) (cdddr tree)))
+         (allocated-blocks (map cdr allocated))
+         (return-register regs)
+         (allocated-used (without (unique (append* (map car allocated))) return-register)))
+    (cons allocated-used
+          (cons (car tree)
+                (cons (cadr tree)
+                      (cons (caddr tree)
+                            allocated-blocks))))))
 
 (define (update-vars assocl key value)
   (cond ((eq? (caar assocl) key) (cons (list key value) (cdr assocl)))
@@ -176,7 +179,7 @@
       #f
       (let ((out (tree-match-i tree rule (map (lambda (x) (list x null)) vars))))
         (if out
-            (map (lambda (x) (assert (not (empty? x))) x) out)
+            (map (lambda (x) (assert (not (empty? x)) "Tree match failed to populate all variables.") x) out)
             out))))
 
 (define (fetch-all-args varlist vars)
