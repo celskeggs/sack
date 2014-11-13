@@ -1,6 +1,6 @@
 #lang racket
 
-(provide zip unzip without assert tree->string trace)
+(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream)
 
 (define (zip a b)
   (cond ((and (empty? a) (empty? b)) empty)
@@ -26,3 +26,30 @@
   (if x
       x
       (error "Assertion failed")))
+
+(define (find-index-i predicate sequence i)
+  (cond ((empty? sequence) (error "No match in list!"))
+        ((predicate (car sequence)) i)
+        (else (find-index-i predicate (cdr sequence) (+ i 1)))))
+
+(define (find-index predicate sequence)
+  (find-index-i predicate sequence 0))
+
+(define (list->stream list)
+  (if (empty? list) empty-stream
+      (stream-cons (car list) (list->stream (cdr list)))))
+
+(define (stream-append-stream stream-stream)
+  (define (s-a-s-i active more)
+    (if (stream-empty? active) (stream-append-stream more)
+        (stream-cons (stream-first active) (s-a-s-i (stream-rest active) more))))
+  (if (stream-empty? stream-stream)
+      empty-stream
+      (s-a-s-i (stream-first stream-stream) (stream-rest stream-stream))))
+
+(define (enumerate x)
+  (define (enumerate-i x i)
+    (if (empty? x)
+        empty
+        (cons (cons i (car x)) (enumerate-i (cdr x) (+ i 1)))))
+  (enumerate-i x 0))

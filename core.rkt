@@ -1,32 +1,12 @@
 #lang racket
 
-(require racket/stream)
 (require "utilities.rkt")
 
+(provide register-allocation)
+(provide tree-transform)
+(provide asm-write)
+
 ; SACK! The Semantic Automated Compiler Kit.
-
-; Let's start with a simple tree that we'll get from the parser/front-end generator.
-
-(define sample '(fib (u4) u4
-                     ((branch (<= (arg 0) (const 1 u4)) ; 0
-                             1 2))
-                     ((return (const 1 u4)))
-                     ((return (+ (call fib (- (arg 0) (const 1 u4)))
-                                 (call fib (- (arg 0) (const 2 u4))))))))
-
-(define reduced '(fib (u4) u4
-                      ((swr 0 (arg 0))
-                       (swr 1 (<= (swr 0) (const 1 u4)))
-                       (branch (swr 1) 1 2))
-                      ((swr 0 (const 1 u4))
-                       (return (swr 0)))
-                      ((swr 0 (arg 0))
-                       (swr 2 (- (swr 0) (const 1 u4)))
-                       (swr 3 (call fib (swr 2)))
-                       (swr 5 (- (swr 0) (const 2 u4)))
-                       (swr 6 (call fib (swr 5)))
-                       (swr 7 (+ (swr 3) (swr 6)))
-                       (return (swr 7)))))
 
 ; related to the next function
 (define (register-allocation-insert-defers block begin-unused)
@@ -65,14 +45,6 @@
 
 (define (swr-find-unused-beginning block)
   (+ 1 (apply max (swr-listing block))))
-
-(define (find-index p seq)
-  (find-index-i p seq 0))
-
-(define (find-index-i p seq i)
-  (cond ((empty? seq) (error "No match in list!"))
-        ((p (car seq)) i)
-        (else (find-index-i p (cdr seq) (+ i 1)))))
 
 (define (tree-search haystack needle)
   (cond ((equal? haystack needle) #t)
@@ -118,18 +90,6 @@
     (let ((sorted-starts (sort (first unzipped) (lambda (a b) (< (second a) (second b)))))
           (sorted-ends (sort (second unzipped) (lambda (a b) (< (second a) (second b))))))
       (swr-preferences-iter sorted-starts sorted-ends))))
-
-(define (stream-append-stream stream-stream)
-  (define (s-a-s-i active more)
-    (if (stream-empty? active) (stream-append-stream more)
-        (stream-cons (stream-first active) (s-a-s-i (stream-rest active) more))))
-  (if (stream-empty? stream-stream)
-      empty-stream
-      (s-a-s-i (stream-first stream-stream) (stream-rest stream-stream))))
-
-(define (list->stream list)
-  (if (empty? list) empty-stream
-      (stream-cons (car list) (list->stream (cdr list)))))
 
 (define (find-vars-in-register allocation register)
   (filter-map (lambda (kvpair)
@@ -190,16 +150,6 @@
         (cons (cadr tree)
               (cons (caddr tree)
                     (map (curry register-allocation-block regs) (cdddr tree))))))
-
-(define x86-registers
-  '(eax ; return register
-    (eax ebx ecx edx ebp esi edi))) ; all general-purpose registers
-
-reduced
-;(map swr-conflicts (cdddr reduced))
-;(map swr-usage-ranges (cdddr reduced))
-;(map swr-preferences (cdddr reduced))
-(register-allocation x86-registers reduced)
 
 (define (update-vars assocl key value)
   (cond ((eq? (caar assocl) key) (cons (list key value) (cdr assocl)))
@@ -266,130 +216,6 @@ reduced
               (tree-transform-i tree (cdr rules))))))
   (tree-transform-i orig-tree all-rules))
 
-(define x86-output-prerules `(
-                              (()
-                               (pushall)
-                               (seq))
-                              ((h r)
-                               (pushall h . r)
-                               (seq
-                                (pushone h)
-                                (pushall . r)))
-                              ((f a)
-                               (reg eax (call f . a))
-                               (seq
-                                (pushall . a)
-                                (call f)
-                                (add esp ,(lambda (f a) (* 4 (length a))))))
-                              ((r)
-                               (pushone (reg r))
-                               (push r))
-                              ((r n)
-                               (reg r (arg n))
-                               (mov r (mem esp ,(lambda (r n) (* (+ n 1) 4)))))
-                              ((r)
-                               (reg r (reg r))
-                               (seq))
-                              ((ro ri)
-                               (reg ro (reg ri))
-                               (mov ro ri))
-                              ((ro ri cst)
-                               (reg ro (<= (reg ri) (const cst u4)))
-                               (seq
-                                (cmp ri (dword cst))
-                                (setbe (reg-low-byte ro))
-                                (movzbl ro (reg-low-byte ro))))
-                              ((r cst)
-                               (reg r (+ (reg r) (const cst u4)))
-                               (add r (dword cst)))
-                              ((ro ri)
-                               (reg ro (+ (reg ro) (reg ri)))
-                               (add ro ri))
-                              ((ro ri)
-                               (reg ro (+ (reg ri) (reg ro)))
-                               (add ro ri))
-                              ((r cst)
-                               (reg r (- (reg r) (const cst u4)))
-                               (sub r (dword cst)))
-                              ((ro ri cst)
-                               (reg ro (+ (reg ri) (const cst u4)))
-                               (seq
-                                (mov ro ri)
-                                (add ro (dword cst))))
-                              (()
-                               (reg-low-byte eax)
-                               al)
-                              ((cond true false)
-                               (branch (reg cond) true false)
-                               (seq
-                                (cmp cond 0)
-                                (jne true)
-                                (jmp false)))
-                              ((r cst)
-                               (reg r (const cst u4))
-                               (mov r (dword cst)))
-                              (()
-                               (return (reg eax))
-                               (ret))
-                              ))
-
-(define x86-output '(((label x) x ":")
-                     ((local x) ".lab" x ":")
-                     ((mov dst src) "  mov " dst ", " src)
-                     ((cmp a b) "  cmp " a ", " b)
-                     ((jle tgt) "  jle " ".lab" tgt)
-                     ((jge tgt) "  jge " ".lab" tgt)
-                     ((jl tgt) "  jl " ".lab" tgt)
-                     ((jg tgt) "  jg " ".lab" tgt)
-                     ((je tgt) "  je " ".lab" tgt)
-                     ((jne tgt) "  jne " ".lab" tgt)
-                     ((jmp tgt) "  jmp " ".lab" tgt)
-                     ((ret) "  ret")
-                     ((add dst src) "  add " dst ", " src)
-                     ((sub dst src) "  sub " dst ", " src)
-                     ((push val) "  push " val)
-                     ((pop val) "  pop " val)
-                     ((call name) "  call " name)
-                     ((mem x) "[" x "]")
-                     ((mem x p) "[" x "+" p "]")
-                     ((dword x) "dword " x)
-                     ((setbe x) "  setbe " x)
-                     ((movzbl dst src) "  movzbl " dst ", " src)
-                     ))
-
-; modifiable: eax, ecx, edx
-; registers: eax, ebx, ecx, edx, esp, ebp, esi, edi
-; can use: eax, ebx, ecx, edx, ebp, esi, edi
-
-(define (enumerate x)
-  (define (enumerate-i x i)
-    (if (empty? x)
-        empty
-        (cons (cons i (car x)) (enumerate-i (cdr x) (+ i 1)))))
-  (enumerate-i x 0))
-
-(define x86-simple-near '(fib (u4) u4
-                              ((mov eax (mem esp 4))
-                               (cmp eax (dword 1))
-                               (jle 1)
-                               (jmp 2))
-                              ((mov eax (dword 1))
-                               (ret))
-                              ((mov eax (mem esp 4))
-                               (sub eax (dword 1))
-                               (push eax)
-                               (call fib)
-                               (add esp 4)
-                               (mov ecx (mem esp 4))
-                               (sub ecx (dword 1))
-                               (push eax)
-                               (push ecx)
-                               (call fib)
-                               (add esp 4)
-                               (pop ecx)
-                               (add eax ecx)
-                               (ret))))
-
 (define (flatten-labels-single enum-block)
   (cons (list 'local (car enum-block))
         (cdr enum-block)))
@@ -428,8 +254,3 @@ reduced
 
 (define (asm-write-flat lookup flattened)
   (string-join (filter (lambda (x) (not (= (string-length x) 0))) (map (curry asm-write-single lookup) flattened)) "\n"))
-
-; (display (asm-write x86-output x86-simple-near))
-(define medium (tree-transform (register-allocation x86-registers reduced) x86-output-prerules))
-medium
-(display (asm-write x86-output medium))
