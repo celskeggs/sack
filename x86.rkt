@@ -20,7 +20,7 @@
                               ((f a)
                                (reg eax (call f . a))
                                (seq
-                                (pushall . a)
+                                (pushall . ,(lambda (f a) (reverse a)))
                                 (call f)
                                 (add esp ,(lambda (f a) (* 4 (length a))))))
                               ((r)
@@ -47,6 +47,18 @@
                                 (cmp ra rb)
                                 (setbe (reg-low-byte ro))
                                 (movzx ro (reg-low-byte ro))))
+                              ((ro ri cst)
+                               (reg ro (== (reg ri) (const cst u4)))
+                               (seq
+                                (cmp ri (dword cst))
+                                (sete (reg-low-byte ro))
+                                (movzx ro (reg-low-byte ro))))
+                              ((ro ra rb)
+                               (reg ro (== (reg ra) (reg rb)))
+                               (seq
+                                (cmp ra rb)
+                                (sete (reg-low-byte ro))
+                                (movzx ro (reg-low-byte ro))))
                               ((r cst)
                                (reg r (+ (reg r) (const cst u4)))
                                (add r (dword cst)))
@@ -69,7 +81,9 @@
                                (sub ro ri))
                               ((ro ri)
                                (reg ro (- (reg ri) (reg ro)))
-                               (sub ro ri))
+                               (seq
+                                (neg ro)
+                                (add ro ri)))
                               ((ro ri cst)
                                (reg ro (- (reg ri) (const cst u4)))
                                (seq
@@ -106,6 +120,7 @@
                      ((ret-real) "  ret")
                      ((add dst src) "  add " dst ", " src)
                      ((sub dst src) "  sub " dst ", " src)
+                     ((neg dst) "  neg " dst)
                      ((push val) "  push " val)
                      ((pop val) "  pop " val)
                      ((call name) "  call " name)
@@ -113,6 +128,8 @@
                      ((mem x p) "[" x "+" p "]")
                      ((dword x) "dword " x)
                      ((setbe x) "  setbe " x)
+                     ((setne x) "  setne " x)
+                     ((sete x) "  sete " x)
                      ((movzx dst src) "  movzx " dst ", " src)
                      ))
 

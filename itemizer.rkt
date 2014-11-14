@@ -5,13 +5,12 @@
 (provide itemize)
 
 (define sample '(fib (u4) u4
-                     ((branch (<= (arg 0) (const 1 u4)) ; 0
-                             1 2))
+                     ((branch (<= (arg 0) (const 1 u4)) 1 2))
                      ((return (const 1 u4)))
                      ((return (+ (call fib (- (arg 0) (const 1 u4)))
                                  (call fib (- (arg 0) (const 2 u4))))))))
 
-(define simple-binary-operations '(<= >= < > = != + - * / %))
+(define simple-binary-operations '(<= >= < > == != + - * / %))
 
 (define (itemize tree)
   (let ((name (car tree)) (args (cadr tree)) (rettype (caddr tree)) (body (cdddr tree)))
