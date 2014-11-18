@@ -1,6 +1,6 @@
 #lang racket
 
-(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique)
+(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique symbol<?)
 
 (define (zip a b)
   (cond ((and (empty? a) (empty? b)) empty)
@@ -63,5 +63,8 @@
         ((eq? (first seq) (second seq)) (unique-i (cdr seq)))
         (else (cons (first seq) (unique-i (cdr seq))))))
 
+(define (symbol<? a b)
+  (string<? (symbol->string a) (symbol->string b)))
+
 (define (unique x)
-  (unique-i (sort x (lambda (a b) (string<? (symbol->string a) (symbol->string b))))))
+  (unique-i (sort x symbol<?)))

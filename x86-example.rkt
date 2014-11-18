@@ -18,7 +18,7 @@
                                   (ack (- m 1) (ack m (- n 1)))))))
 (define math-example '(math ((a u4) (b u4)) u4
                              (+ a b)))
-(define example fib-example)
+(define example math-example)
 
 ; OLD: Let's start with a simple tree that we'll get from the parser/front-end generator.
 (define sample-old '(fib (u4) u4
