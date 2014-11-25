@@ -8,7 +8,8 @@
 (struct boxdag-rule
   (args   ; ((argument-name . predicate) ...)
    find
-   repl))
+   repl)
+  #:inspector #f)
 
 ; Find the predicate for the specified argument, or #f if not found.
 (define (get-rule-predicate rule name)
