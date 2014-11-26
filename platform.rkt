@@ -17,7 +17,7 @@
   (if (symbol? behavior)
       (if (assoc behavior arguments)
           (let ((predicate (second (assoc behavior arguments))))
-            (cond [(eq? predicate const?) (list 'const behavior)]
+            (cond [(eq? predicate const?) (list 'const behavior 'u4)] ; TODO: don't hardcode type
                   [(eq? predicate symbol?) behavior]
                   [else (error "Uncertain how to handle raw argument:" behavior)]))
           (error "Uncertain how to handle raw non-argument symbol:" behavior))
@@ -162,7 +162,7 @@
   (platform-apply platform (make-boxdag input)))
 (define (calc-fixup-arg arg cond)
   (if (eq? cond const?)
-      (list 'const arg)
+      (list 'const arg 'u4) ; TODO: don't hard-code types
       arg))
 (define (calc-fixup-recurse args data)
   (cond ((pair? data)
@@ -192,4 +192,4 @@
 (define (const? x)
   (integer? x))
 (define (wrap-const x)
-  (list 'const x))
+  (list 'const x 'u4)) ; TODO: don't hard-code types

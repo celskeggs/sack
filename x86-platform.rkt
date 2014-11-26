@@ -5,7 +5,7 @@
 
 (platform x86
           (register-based eax ebx ecx edx esi edi)
-          (argument-behavior argid (get-memory (+ (get-reg ebp) (+ (const 8) (* (const argid) (const 4))))))
+          (argument-behavior argid (get-memory (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4))))))
           (reduction-simple (get-memory (c const?))
                             (x86/get-memory/c c))
           (reduction-advanced (a any?) (b const?)
@@ -33,6 +33,14 @@
            [(x86/add/dd (dest any?) (source any?))
             ("  add " dest ", " source)
             (set-reg dest (+ (get-reg dest) (get-reg source)))]
+           
+           [(x86/sub/dc (dest any?) (source const?))
+            ("  sub " dest ", " source)
+            (set-reg dest (- (get-reg dest) source))]
+           
+           [(x86/sub/dd (dest any?) (source any?))
+            ("  sub " dest ", " source)
+            (set-reg dest (- (get-reg dest) (get-reg source)))]
            
            [(x86/call (target symbol?))
             ("  call " target)
