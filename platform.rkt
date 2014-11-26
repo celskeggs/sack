@@ -1,6 +1,7 @@
 #lang racket
 
-(provide platform register-based argument-behavior use-standard-reductions reduction-simple reduction-advanced reduction-calc const? any? instructions platform-process)
+(provide platform register-based argument-behavior use-standard-reductions reduction-simple reduction-advanced reduction-calc
+         const? any? instructions platform-apply platform-process call-behavior-forward)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -13,9 +14,10 @@
 (define (convert-behavior-expr arguments behavior)
   (if (symbol? behavior)
       (if (assoc behavior arguments)
-          (if (eq? (second (assoc behavior arguments)) const?)
-              (list 'const behavior)
-              (error "Uncertain how to handle raw argument:" behavior))
+          (let ((predicate (second (assoc behavior arguments))))
+            (cond [(eq? predicate const?) (list 'const behavior)]
+                  [(eq? predicate symbol?) behavior]
+                  [else (error "Uncertain how to handle raw argument:" behavior)]))
           (error "Uncertain how to handle raw non-argument symbol:" behavior))
       (case (car behavior)
         ('get-reg
@@ -30,6 +32,9 @@
     ('set-reg
      (assert (= (length behavior) 3) "set-reg expects two arguments")
      (convert-behavior-expr arguments (third behavior)))
+    ('discard
+     (assert (= (length behavior) 2) "discard expects one argument")
+     (convert-behavior-expr arguments (second behavior)))
     (else (error "Unexpected behavior type" (car behavior)))))
 
 (define (convert-behavior name arguments behavior)
@@ -106,9 +111,30 @@
             (void)))) ...))
 (define-syntax-rule (use-standard-reductions)
   (begin
-   (reduction-calc (+ (a const?) (b const?)) (wrap-const (+ a b)))
-   (reduction-calc (* (a const?) (b const?)) (wrap-const (* a b)))
-   ))
+    (reduction-calc (+ (a const?) (b const?)) (wrap-const (+ a b)))
+    (reduction-calc (* (a const?) (b const?)) (wrap-const (* a b)))
+    (reduction-advanced (x any?) (generic/middle-of (generic/middle x)) x)
+    (reduction-advanced (x any?) (rest pair?) (generic/middle-of (generic/middle x) . rest) x)
+    (reduction-advanced (x any?) (rest pair?) (generic/middle-of x . rest) (generic/middle-of . rest))
+    ))
+(define-syntax-rule (call-behavior-forward (argn pushexpr) (argn2 popexpr))
+  (begin
+    (reduction-simple (generic/call-argument-add (argn any?))
+                      pushexpr)
+    (reduction-simple (generic/call-argument-remove (argn2 any?))
+                      popexpr)
+    (add-platform-rule! active-platform-ref
+                        (boxdag-rule
+                         (list (cons 'target symbol?) (cons 'args list?))
+                         '(call target . args)
+                         (lambda (vars)
+                           (let ((target (cdr (assoc 'target vars)))
+                                 (args (cdr (assoc 'args vars))))
+                             (append '(generic/middle-of)
+                                     (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-add arg))) args)
+                                     `((generic/middle (boxdag/preserve (call-raw ,target))))
+                                     (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-remove arg))) args))))))
+    ))
 (define-syntax-rule (platform name entry ...)
   (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
@@ -117,10 +143,11 @@
                                       entry ...)
                  (finalize-platform platform-def))))
 
+(define (platform-apply platform boxdag)
+  (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
+  boxdag)
 (define (platform-process platform input)
-  (let ((boxdag (make-boxdag input)))
-    (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
-    boxdag))
+    (platform-apply platform (make-boxdag input)))
 (define (calc-fixup-arg arg cond)
   (if (eq? cond const?)
       (list 'const arg)
