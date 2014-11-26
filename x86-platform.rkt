@@ -30,6 +30,10 @@
             ("  add " dest ", " source)
             (set-reg dest (+ (get-reg dest) source))]
            
+           [(x86/add/dd (dest any?) (source any?))
+            ("  add " dest ", " source)
+            (set-reg dest (+ (get-reg dest) (get-reg source)))]
+           
            [(x86/call (target symbol?))
             ("  call " target)
             (set-reg eax (call-raw target))]
@@ -55,10 +59,11 @@
             (set-reg dest source)]
            ))
 
-;(define bd1 (make-boxdag '(+ (const 8) (* (const 0) (const 4)))))
-(define bd1 (make-boxdag '(+ (arg 0) (const 10))))
-(strip-boxes (get-boxdag-contents (platform-apply x86 bd1)))
-(define bd2 (platform-process x86 '(call hello (call a (arg 1)) (call b (const 30)))))
-;(define bd2 (platform-process x86 '(call hello (arg 1) (const 30))))
-;(define bd2 (platform-process x86 '(call hello (const 30))))
-(strip-boxes (get-boxdag-contents bd2))
+(define sample '(fib ((n u4)) u4
+                     (if (<= n 1)
+                         1
+                         (+ (fib (- n 1))
+                            (fib (- n 2))))))
+(define math-sample '(math ((a u4) (b u4)) u4
+                           (+ a b)))
+(platform-parse x86 sample)

@@ -1,12 +1,14 @@
 #lang racket
 
 (provide platform register-based argument-behavior use-standard-reductions reduction-simple reduction-advanced reduction-calc
-         const? any? instructions platform-apply platform-process call-behavior-forward)
+         const? any? instructions platform-apply platform-process call-behavior-forward platform-parse)
 
 (require racket/stxparam)
 (require "utilities.rkt")
 (require "boxdag.rkt")
 (require "boxdag-rules.rkt")
+(require "parser.rkt")
+(require "boxdag-to-swr.rkt")
 
 ; Currently assuming register-based.
 
@@ -143,11 +145,21 @@
                                       entry ...)
                  (finalize-platform platform-def))))
 
+(define (platform-parse platform input)
+  (let* ((parsed (parse input))
+         (name (first parsed))
+         (args (second parsed))
+         (rettype (third parsed))
+         (body (cdddr parsed)))
+    (cons name (cons args (cons rettype (map (curry platform-process-block platform) body))))))
+(define (platform-process-block platform block)
+  (assert (= (length block) 1) "Can only process one statement per block. (TODO)")
+  (full-swrify (get-boxdag-contents (platform-process platform (car block)))))
 (define (platform-apply platform boxdag)
   (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
   boxdag)
 (define (platform-process platform input)
-    (platform-apply platform (make-boxdag input)))
+  (platform-apply platform (make-boxdag input)))
 (define (calc-fixup-arg arg cond)
   (if (eq? cond const?)
       (list 'const arg)
