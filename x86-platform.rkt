@@ -2,6 +2,7 @@
 
 (require "boxdag.rkt")
 (require "platform.rkt")
+(require "platform-templates.rkt")
 
 (platform x86
           (register-based eax ebx ecx edx esi edi)
@@ -64,8 +65,7 @@
              (set-reg carry-flag (unsigned< (get-reg a) (get-reg b)))
              (set-reg zero-flag (= (get-reg a) (get-reg b)))
              (set-reg sign-flag-xor-overflow-flag (< (get-reg a) (get-reg b)))
-             )
-            ]
+             )]
            
            ; Remember when adding register allocation:
            ; the name forces the register to be eax.

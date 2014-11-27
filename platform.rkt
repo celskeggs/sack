@@ -1,7 +1,7 @@
 #lang racket
 
-(provide platform register-based argument-behavior use-standard-reductions reduction-simple reduction-advanced reduction-calc
-         const? any? instructions platform-apply platform-process call-behavior-forward platform-parse)
+(provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions
+         platform-apply platform-process platform-parse register? set-registers!)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -22,6 +22,8 @@
                    (reverse (mutable-platform-struct-instrs x))
                    (reverse (mutable-platform-struct-rules x))))
 
+(define-syntax-rule (set-registers! regs)
+  (set-mutable-platform-struct-registers! active-platform-ref regs))
 (define (add-platform-rule! platform-ref rule)
   (set-mutable-platform-struct-rules! platform-ref (cons rule (mutable-platform-struct-rules platform-ref))))
 (define (add-platform-instr! platform-ref instr)
@@ -41,15 +43,6 @@
                     (lambda (arg-name ...)
                       (list string-part ...))
                     'instr-behavior))
-(define-syntax-rule (register-based reg ...)
-  (begin
-    (define registers '(reg ...))
-    (set! register? (lambda (r) (and (member r registers) #t)))
-    (set-mutable-platform-struct-registers! active-platform-ref registers)))
-(define-syntax-rule (argument-behavior argname contents)
-  (add-platform-rule! active-platform-ref (boxdag-rule (list (cons 'argname any?))
-                                                       '(arg argname)
-                                                       'contents)))
 (define (is-trivial-rule rule)
   (and (symbol? (boxdag-rule-find rule))
        (= (length (boxdag-rule-args rule)) 1)
@@ -62,32 +55,6 @@
         (for ([rule (instruction-struct-rules i-struct)]
               #:unless (is-trivial-rule rule))
           (add-platform-rule! active-platform-ref rule)))) ...))
-(define-syntax-rule (use-standard-reductions)
-  (begin
-    (reduction-calc (+ (a const?) (b const?)) (wrap-const (+ a b)))
-    (reduction-calc (* (a const?) (b const?)) (wrap-const (* a b)))
-    (reduction-advanced (x any?) (generic/middle-of (generic/middle x)) x)
-    (reduction-advanced (x any?) (rest pair?) (generic/middle-of (generic/middle x) . rest) x)
-    (reduction-advanced (x any?) (rest pair?) (generic/middle-of x . rest) (generic/middle-of . rest))
-    ))
-(define-syntax-rule (call-behavior-forward (argn pushexpr) (argn2 popexpr))
-  (begin
-    (reduction-simple (generic/call-argument-add (argn any?))
-                      pushexpr)
-    (reduction-simple (generic/call-argument-remove (argn2 any?))
-                      popexpr)
-    (add-platform-rule! active-platform-ref
-                        (boxdag-rule
-                         (list (cons 'target symbol?) (cons 'args list?))
-                         '(call target . args)
-                         (lambda (vars)
-                           (let ((target (cdr (assoc 'target vars)))
-                                 (args (cdr (assoc 'args vars))))
-                             (append '(generic/middle-of)
-                                     (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-add arg))) args)
-                                     `((generic/middle (boxdag/preserve (call-raw ,target))))
-                                     (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-remove arg))) args))))))
-    ))
 (define-syntax-rule (platform name entry ...)
   (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
@@ -122,6 +89,9 @@
         ((and (assoc data args) (eq? (cdr (assoc data args)) const?))
          (wrap-const data))
         (else data)))
+(define-syntax-rule (reduction-raw args find repl)
+  (add-platform-rule! active-platform-ref
+                      (boxdag-rule args find repl)))
 (define-syntax-rule (reduction-advanced (arg cond) ... find repl)
   (add-platform-rule! active-platform-ref
                       (boxdag-rule (list (cons 'arg cond) ...) (calc-fixup-recurse (list (cons 'arg cond) ...) 'find) 'repl)))
