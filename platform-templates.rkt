@@ -34,3 +34,12 @@
                                (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-add arg))) args)
                                `((generic/middle (boxdag/preserve (call-raw ,target))))
                                (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-remove arg))) args)))))))
+
+(provide reduce-<= reduce->=)
+
+(define-syntax-rule (reduce-<=)
+  (reduction-simple (<= (a any?) (b any?))
+                    (logical/or (< a b) (= a b))))
+(define-syntax-rule (reduce->=)
+  (reduction-simple (>= (a any?) (b any?))
+                    (logical/or (> a b) (= a b))))

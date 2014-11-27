@@ -18,6 +18,7 @@
            (arg (push arg)) ; handle adding arguments
            (arg (pop))) ; handle removing arguments
           (use-standard-reductions)
+          (reduce-<=) (reduce->=)
           (instructions
            [(x86/movfm/c (dest any?) (source const?))
             ("  mov " dest ", [" source "]")
