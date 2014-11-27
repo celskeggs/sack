@@ -58,6 +58,21 @@
             ("  pop " dest)
             (set-reg dest (pop))]
            
+           [(x86/cmp/dd (a any?) (b any?))
+            ("  cmp " a ", " b)
+            ;(multiple
+             ;(set-reg carry-flag (unsigned< a b))
+             (set-reg zero-flag (= (get-reg a) (get-reg b)))
+             ;(set-reg sign-flag-xor-overflow-flag (< a b))
+             ;)
+            ]
+           
+           ; Remember when adding register allocation:
+           ; the name forces the register to be eax.
+           [(x86/ret (eax any?))
+            ("  ret")
+            (return (get-reg eax))]
+           
            [(x86/mov/d (dest any?) (source any?))
             ("  mov " dest ", " source)
             (set-reg dest (get-reg source))] ; should yield a nullary rule.

@@ -37,6 +37,9 @@
     ('discard
      (assert (= (length behavior) 2) "discard expects one argument")
      (convert-behavior-expr arguments (second behavior)))
+    ('return
+     (assert (= (length behavior) 2) "return expects one argument")
+     (list 'return (convert-behavior-expr arguments (second behavior))))
     (else (error "Unexpected behavior type" (car behavior)))))
 
 (define (convert-behavior name arguments behavior)
