@@ -60,11 +60,11 @@
            
            [(x86/cmp/dd (a any?) (b any?))
             ("  cmp " a ", " b)
-            ;(multiple
-             ;(set-reg carry-flag (unsigned< a b))
+            (multiple
+             (set-reg carry-flag (unsigned< (get-reg a) (get-reg b)))
              (set-reg zero-flag (= (get-reg a) (get-reg b)))
-             ;(set-reg sign-flag-xor-overflow-flag (< a b))
-             ;)
+             (set-reg sign-flag-xor-overflow-flag (< (get-reg a) (get-reg b)))
+             )
             ]
            
            ; Remember when adding register allocation:

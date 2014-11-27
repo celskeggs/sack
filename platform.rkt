@@ -5,62 +5,13 @@
 
 (require racket/stxparam)
 (require "utilities.rkt")
+(require "common.rkt")
 (require "boxdag.rkt")
 (require "boxdag-rules.rkt")
 (require "parser.rkt")
 (require "boxdag-to-swr.rkt")
+(require "rule-generator.rkt")
 
-; Currently assuming register-based.
-
-; arguments: ((name predicate) ...)
-(define (convert-behavior-expr arguments behavior)
-  (if (symbol? behavior)
-      (if (assoc behavior arguments)
-          (let ((predicate (second (assoc behavior arguments))))
-            (cond [(eq? predicate const?) (list 'const behavior 'u4)] ; TODO: don't hardcode type
-                  [(eq? predicate symbol?) behavior]
-                  [else (error "Uncertain how to handle raw argument:" behavior)]))
-          (error "Uncertain how to handle raw non-argument symbol:" behavior))
-      (case (car behavior)
-        ('get-reg
-         (assert (= (length behavior) 2) "get-reg expects one argument")
-         (assert (symbol? (second behavior)) "get-reg expects a symbol argument")
-         (second behavior))
-        (else
-         (cons (car behavior) (map (curry convert-behavior-expr arguments) (cdr behavior)))))))
-
-(define (convert-behavior-line arguments behavior)
-  (case (car behavior)
-    ('set-reg
-     (assert (= (length behavior) 3) "set-reg expects two arguments")
-     (convert-behavior-expr arguments (third behavior)))
-    ('discard
-     (assert (= (length behavior) 2) "discard expects one argument")
-     (convert-behavior-expr arguments (second behavior)))
-    ('return
-     (assert (= (length behavior) 2) "return expects one argument")
-     (list 'return (convert-behavior-expr arguments (second behavior))))
-    (else (error "Unexpected behavior type" (car behavior)))))
-
-(define (convert-behavior name arguments behavior)
-  (let ((conv (convert-behavior-line arguments behavior)))
-    (define (used-in-conversion arg-pair)
-      (let ((arg (car arg-pair)))
-        (define (used-in-conversion-iter area)
-          (or (eq? area arg)
-              (and (pair? area)
-                   (or (used-in-conversion-iter (car area))
-                       (used-in-conversion-iter (cdr area))))))
-        (used-in-conversion-iter conv)))
-    (let ((used-arguments (filter used-in-conversion arguments)))
-      (boxdag-rule
-       (map (lambda (x) (assert (= (length x) 2) "Bad argument declaration") (cons (first x) (second x))) used-arguments)
-       conv
-       (cons name (map car used-arguments))
-       ))))
-
-(struct instruction-struct
-  (name arguments string-gen behavior rule) #:inspector #f)
 (struct mutable-platform-struct
   (name registers instrs rules) #:mutable #:inspector #f)
 (struct platform-struct
@@ -71,9 +22,6 @@
                    (reverse (mutable-platform-struct-instrs x))
                    (reverse (mutable-platform-struct-rules x))))
 
-(define (make-instruction name args string-gen behavior)
-  (instruction-struct name args string-gen behavior
-                      (convert-behavior name args behavior)))
 (define (add-platform-rule! platform-ref rule)
   (set-mutable-platform-struct-rules! platform-ref (cons rule (mutable-platform-struct-rules platform-ref))))
 (define (add-platform-instr! platform-ref instr)
@@ -102,18 +50,18 @@
   (add-platform-rule! active-platform-ref (boxdag-rule (list (cons 'argname any?))
                                                        '(arg argname)
                                                        'contents)))
-(define (is-nontrivial-rule rule)
-  (not (and (symbol? (boxdag-rule-find rule))
-            (= (length (boxdag-rule-args rule)) 1)
-            (equal? (cdar (boxdag-rule-args rule)) any?))))
+(define (is-trivial-rule rule)
+  (and (symbol? (boxdag-rule-find rule))
+       (= (length (boxdag-rule-args rule)) 1)
+       (equal? (cdar (boxdag-rule-args rule)) any?)))
 (define-syntax-rule (instructions instr ...)
   (begin
     (begin
       (let ((i-struct (instruction . instr)))
         (add-platform-instr! active-platform-ref i-struct)
-        (if (is-nontrivial-rule (instruction-struct-rule i-struct))
-            (add-platform-rule! active-platform-ref (instruction-struct-rule i-struct))
-            (void)))) ...))
+        (for ([rule (instruction-struct-rules i-struct)]
+              #:unless (is-trivial-rule rule))
+          (add-platform-rule! active-platform-ref rule)))) ...))
 (define-syntax-rule (use-standard-reductions)
   (begin
     (reduction-calc (+ (a const?) (b const?)) (wrap-const (+ a b)))
@@ -165,14 +113,14 @@
   (platform-apply platform (make-boxdag input)))
 (define (calc-fixup-arg arg cond)
   (if (eq? cond const?)
-      (list 'const arg 'u4) ; TODO: don't hard-code types
+      (wrap-const arg) ; TODO: don't hard-code types
       arg))
 (define (calc-fixup-recurse args data)
   (cond ((pair? data)
          (cons (calc-fixup-recurse args (car data))
                (calc-fixup-recurse args (cdr data))))
         ((and (assoc data args) (eq? (cdr (assoc data args)) const?))
-         (list 'const data))
+         (wrap-const data))
         (else data)))
 (define-syntax-rule (reduction-advanced (arg cond) ... find repl)
   (add-platform-rule! active-platform-ref
@@ -189,10 +137,3 @@
                                    (lambda (vars)
                                      (let ((arg (cdr (assoc 'arg vars))) ...)
                                        repl)))))
-
-(define (any? x)
-  #t)
-(define (const? x)
-  (integer? x))
-(define (wrap-const x)
-  (list 'const x 'u4)) ; TODO: don't hard-code types
