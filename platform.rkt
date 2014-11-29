@@ -72,6 +72,7 @@
     (cons name (cons args (cons rettype (map (curry platform-process-block platform) body))))))
 (define (platform-process-block platform block)
   (assert (= (length block) 1) "Can only process one statement per block. (TODO)")
+  ; Note that full-swrify will mangle the boxdag's contents, but that's fine here.
   (full-swrify (get-boxdag-contents (platform-process platform (car block)))))
 (define (platform-apply platform boxdag)
   (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
