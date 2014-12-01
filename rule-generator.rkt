@@ -42,6 +42,9 @@
     ('return
      (assert (= (length behavior) 2) "return expects one argument")
      (list 'return (convert-behavior-expr arguments (second behavior))))
+    ('goto
+     (assert (= (length behavior) 2) "goto expects one argument")
+     (list 'goto (second behavior)))
     (else (error "Unexpected behavior type" (car behavior)))))
 
 (define (check-used-in zone arg-pair)

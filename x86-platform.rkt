@@ -18,7 +18,7 @@
            (arg (push arg)) ; handle adding arguments
            (arg (pop))) ; handle removing arguments
           (use-standard-reductions)
-          (reduce-<=) (reduce->=)
+          (reduce-<=) (reduce->=) (reduce-branch)
           (instructions
            [(x86/movfm/c (dest any?) (source const?))
             ("  mov " dest ", [" source "]")
@@ -81,6 +81,10 @@
            [(x86/mov/c (dest any?) (source const?))
             ("  mov " dest ", " source)
             (set-reg dest source)]
+           
+           [(x86/jmp (target number?))
+            ("  jmp " target)
+            (goto target)]
            ))
 
 (define sample '(fib ((n u4)) u4

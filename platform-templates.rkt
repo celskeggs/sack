@@ -35,11 +35,13 @@
                                `((generic/middle (boxdag/preserve (call-raw ,target))))
                                (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-remove arg))) args)))))))
 
-(provide reduce-<= reduce->=)
-
+(provide reduce-<= reduce->= reduce-branch)
 (define-syntax-rule (reduce-<=)
   (reduction-simple (<= (a any?) (b any?))
                     (logical/or (< a b) (= a b))))
 (define-syntax-rule (reduce->=)
   (reduction-simple (>= (a any?) (b any?))
                     (logical/or (> a b) (= a b))))
+(define-syntax-rule (reduce-branch)
+  (reduction-simple (branch (condition any?) (true number?) (false number?))
+                    (generic/middle-of (boxdag/preserve (goto-if condition true)) (generic/middle (goto false)))))
