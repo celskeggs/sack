@@ -18,7 +18,7 @@
            (arg (push arg)) ; handle adding arguments
            (arg (pop))) ; handle removing arguments
           (use-standard-reductions)
-          (reduce-<=) (reduce->=) (reduce-branch)
+          (reduce-<=) (reduce->=) (reduce-branch-invert)
           (instructions
            [(x86/movfm/c (dest any?) (source const?))
             ("  mov " dest ", [" source "]")
@@ -60,7 +60,7 @@
             ("  pop " dest)
             (set-reg dest (pop))]
            
-           [(x86/cmp/dd (a any?) (b any?))
+           [(x86/cmp/dd (a any?) (b any?)) ; NAMEP, minus /es
             ("  cmp " a ", " b)
             (multiple
              (set-reg carry-flag (unsigned< (get-reg a) (get-reg b)))
@@ -85,6 +85,10 @@
            [(x86/jmp (target number?))
             ("  jmp " target)
             (goto target)]
+           
+           [(x86/j*z (source number?))
+            ("  j*z " source)
+            (goto-if-not source)]
            ))
 
 (define sample '(fib ((n u4)) u4
@@ -94,4 +98,7 @@
                             (fib (- n 2))))))
 (define math-sample '(math ((a u4) (b u4)) u4
                            (+ a b)))
+(displayln "=== INPUT ===")
+sample
+(displayln "=== OUTPUT ===")
 (platform-parse x86 sample)
