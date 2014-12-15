@@ -45,6 +45,12 @@
     ('goto
      (assert (= (length behavior) 2) "goto expects one argument")
      (list 'goto (second behavior)))
+    ('goto-if
+     (assert (= (length behavior) 3) "goto-if expects two arguments")
+     (list 'goto-if (second behavior) (third behavior)))
+    ('goto-if-not
+     (assert (= (length behavior) 3) "goto-if-not expects two arguments")
+     (list 'goto-if-not (second behavior) (third behavior)))
     (else (error "Unexpected behavior type" (car behavior)))))
 
 (define (check-used-in zone arg-pair)
@@ -56,7 +62,7 @@
                    (used-in-iter (cdr part))))))
     (used-in-iter zone)))
 
-(define (build-converted-rule name arguments enum-pair)
+(define (build-converted-rule name arguments indirect-behavior enum-pair)
   (let ((conv-id (car enum-pair))
         (conv (cdr enum-pair)))
     (boxdag-rule
@@ -66,18 +72,18 @@
      conv
      (if (null? conv-id)
          (cons name (map car arguments))
-         (list 'generic/subresult conv-id (cons name (map car arguments)))))))
+         (let ((reg-name (if (eq? (car indirect-behavior) 'set-reg) (second indirect-behavior) 'generic/unknown)))
+           (list 'generic/subresult conv-id reg-name (cons name (map car arguments))))))))
 
 
 (define (convert-behavior name arguments behavior) ; doing: should return rules, not rule
   (if (eq? (car behavior) 'multiple)
       (let* ((convs (map (curry convert-behavior-line arguments) (cdr behavior)))
              (used-arguments (filter (curry check-used-in convs) arguments)))
-        (map (curry build-converted-rule name used-arguments)
-                  (enumerate convs)))
+        (map (curry build-converted-rule name used-arguments) (cdr behavior) (enumerate convs)))
       (let* ((conv (convert-behavior-line arguments behavior))
              (used-arguments (filter (curry check-used-in conv) arguments)))
-        (list (build-converted-rule name used-arguments (cons null conv))))))
+        (list (build-converted-rule name used-arguments #f (cons null conv))))))
 
 (define (make-instruction name args string-gen behavior)
   (instruction-struct name args string-gen behavior

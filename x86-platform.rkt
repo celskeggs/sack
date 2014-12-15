@@ -70,9 +70,9 @@
            
            ; Remember when adding register allocation:
            ; the name forces the register to be eax.
-           [(x86/ret (eax any?))
+           [(x86/ret (!eax any?))
             ("  ret")
-            (return (get-reg eax))]
+            (return (get-reg !eax))]
            
            [(x86/mov/d (dest any?) (source any?))
             ("  mov " dest ", " source)
@@ -86,13 +86,53 @@
             ("  jmp " target)
             (goto target)]
            
-           [(x86/j*z (source number?))
-            ("  j*z " source)
-            (goto-if-not source)]
+           [(x86/je (source any?) (target number?))
+            ("  je " target)
+            (goto-if (generic/subresult _ zero-flag source) target)]
+           
+           [(x86/jne (source any?) (target number?))
+            ("  jne " target)
+            (goto-if-not (generic/subresult _ zero-flag source) target)]
+           
+           [(x86/jb (source any?) (target number?))
+            ("  jb " target)
+            (goto-if (generic/subresult _ carry-flag source) target)]
+           
+           [(x86/jae (source any?) (target number?))
+            ("  jnb " target)
+            (goto-if-not (generic/subresult _ carry-flag source) target)]
+           
+           [(x86/jbe (source any?) (target number?))
+            ("  jbe " target)
+            (goto-if (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ carry-flag source)) target)]
+           
+           [(x86/ja (source any?) (target number?))
+            ("  ja " target)
+            (goto-if-not (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ carry-flag source)) target)]
+           
+           [(x86/jl (source any?) (target number?))
+            ("  jl " target)
+            (goto-if (generic/subresult _ sign-flag-xor-overflow-flag source) target)]
+           
+           [(x86/jge (source any?) (target number?))
+            ("  jge " target)
+            (goto-if-not (generic/subresult _ sign-flag-xor-overflow-flag source) target)]
+           
+           [(x86/jle (source any?) (target number?))
+            ("  jle " target)
+            (goto-if (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ sign-flag-xor-overflow-flag source)) target)]
+           
+           [(x86/jg (source any?) (target number?))
+            ("  jg " target)
+            (goto-if-not (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ sign-flag-xor-overflow-flag source)) target)]
+           
+           [(x86/jecxz (source any?) (target number?))
+            ("  jecxz " source target)
+            (goto-if-not source target)]
            ))
 
 (define sample '(fib ((n u4)) u4
-                     (if (<= n 1)
+                     (if (< n 2)
                          1
                          (+ (fib (- n 1))
                             (fib (- n 2))))))

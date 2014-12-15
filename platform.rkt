@@ -16,7 +16,7 @@
   (name registers instrs rules) #:mutable #:inspector #f)
 (struct platform-struct
   (name registers instrs rules) #:inspector #f)
-(define (finalize-platform x) ; TODO
+(define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
                    (reverse (mutable-platform-struct-instrs x))

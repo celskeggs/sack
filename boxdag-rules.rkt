@@ -34,14 +34,16 @@
   (define (match-rule-recur finding element) ; TODO: check if the find is the same as the element, even with the boxes
     (cond ((box? element) (match-rule-recur finding (strip-outer-boxes element)))
           ((symbol? finding) ; symbol means either an argument or a required symbol
-           (let ((predicate (get-rule-predicate rule finding)))
-             (if predicate
-                 (if (predicate element)
-                     (list (cons finding element))
-                     #f)
-                 (if (eq? finding element)
-                     empty
-                     #f))))
+           (if (eq? finding '_)
+               empty
+               (let ((predicate (get-rule-predicate rule finding)))
+                 (if predicate
+                     (if (predicate element)
+                         (list (cons finding element))
+                         #f)
+                     (if (eq? finding element)
+                         empty
+                         #f)))))
           ((xor (pair? finding) (pair? element)) #f) ; either neither must be a pair or both must be
           ((not (pair? finding)) ; if they're not pairs, no recursion is necessary.
            (if (equal? finding element)
