@@ -3,6 +3,7 @@
 (require "boxdag.rkt")
 (require "platform.rkt")
 (require "platform-templates.rkt")
+(require "register-allocation.rkt")
 
 (platform x86
           (register-based eax ebx ecx edx esi edi)
@@ -141,4 +142,6 @@
 (displayln "=== INPUT ===")
 sample
 (displayln "=== OUTPUT ===")
-(platform-parse x86 sample)
+(define conv (platform-parse x86 sample))
+conv
+(register-allocate conv)
