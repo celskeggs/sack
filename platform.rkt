@@ -1,7 +1,9 @@
 #lang racket
 
 (provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions
-         platform-apply platform-process platform-parse register? set-registers!)
+         platform-apply platform-process platform-parse register? set-registers! platform-struct-instrs
+         ; TEMPORARY
+         instruction instruction-struct-name instruction-struct-constraints instruction-struct-arguments)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -9,7 +11,7 @@
 (require "boxdag.rkt")
 (require "boxdag-rules.rkt")
 (require "parser.rkt")
-(require "boxdag-to-swr.rkt")
+(require "boxdag-to-ssa.rkt")
 (require "rule-generator.rkt")
 
 (struct mutable-platform-struct
@@ -42,7 +44,8 @@
                     (list (list 'arg-name arg-type) ...)
                     (lambda (arg-name ...)
                       (list string-part ...))
-                    'instr-behavior))
+                    'instr-behavior
+                    empty))
 (define (is-trivial-rule rule)
   (and (symbol? (boxdag-rule-find rule))
        (= (length (boxdag-rule-args rule)) 1)
@@ -72,8 +75,8 @@
     (cons name (cons args (cons rettype (map (curry platform-process-block platform) body))))))
 (define (platform-process-block platform block)
   (assert (= (length block) 1) "Can only process one statement per block. (TODO)")
-  ; Note that full-swrify will mangle the boxdag's contents, but that's fine here.
-  (full-swrify (get-boxdag-contents (platform-process platform (car block)))))
+  ; Note that full-ssaify will mangle the boxdag's contents, but that's fine here.
+  (full-ssaify (get-boxdag-contents (platform-process platform (car block)))))
 (define (platform-apply platform boxdag)
   (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
   boxdag)

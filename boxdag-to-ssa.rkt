@@ -1,6 +1,6 @@
 #lang racket
 
-(provide full-swrify)
+(provide full-ssaify)
 
 (require "utilities.rkt")
 (require "boxdag.rkt")
@@ -48,40 +48,40 @@
             (x86/movfm/d (x86/add/dd (get-reg ebp) (x86/mov/c 12))))))
 
 
-(struct swrified-reference (ref stmts) #:inspector #f)
+(struct ssaified-reference (ref stmts) #:inspector #f)
 
-(define (make-swrified-reference pair)
-  (swrified-reference (car pair) (cdr pair)))
-(define (get-swr)
+(define (make-ssaified-reference pair)
+  (ssaified-reference (car pair) (cdr pair)))
+(define (get-ssa)
   (box (void)))
 (define (is-simple-ref x)
   (member (car x) '(get-reg)))
-(define (swrify x (is-top-level #f)) ; returns ('swr swr-id) . ((swr . code) (swr . code) ...) OR x . empty
+(define (ssaify x (is-top-level #f)) ; returns ('ssa ssa-id) . ((ssa . code) (ssa . code) ...) OR x . empty
   (cond ((and (pair? x) (eq? (car x) 'boxdag/preserve-ref))
          (cons (second x) empty))
         ((and (pair? x) (not (is-simple-ref x)))
-         (let ((gotten (swrify-node x)))
-           (cons (list 'swr (car gotten)) (cdr gotten))))
+         (let ((gotten (ssaify-node x)))
+           (cons (list 'ssa (car gotten)) (cdr gotten))))
         ((and (box? x) is-top-level)
-         (swrify (unbox x)))
-        ((and (box? x) (swrified-reference? (unbox x)))
-         (cons (swrified-reference-ref (unbox x)) empty))
+         (ssaify (unbox x)))
+        ((and (box? x) (ssaified-reference? (unbox x)))
+         (cons (ssaified-reference-ref (unbox x)) empty))
         ((box? x)
-         (set-box! x (make-swrified-reference (swrify (unbox x))))
-         (cons (swrified-reference-ref (unbox x)) (swrified-reference-stmts (unbox x))))
+         (set-box! x (make-ssaified-reference (ssaify (unbox x))))
+         (cons (ssaified-reference-ref (unbox x)) (ssaified-reference-stmts (unbox x))))
         (else (cons x empty))))
-(define (swrify-all xes) ; returns (('swr swr-id) OR x ...) . ((swr . code) (swr . code) ...)
-  (let ((processed (map swrify xes)))
+(define (ssaify-all xes) ; returns (('ssa ssa-id) OR x ...) . ((ssa . code) (ssa . code) ...)
+  (let ((processed (map ssaify xes)))
     (cons (map car processed) (append* (map cdr processed)))))
-(define (swrify-node x) ; returns swr-id (swr . code) (swr . code) ...
+(define (ssaify-node x) ; returns ssa-id (ssa . code) (ssa . code) ...
   (let* ((name (car x))
-         (processed (swrify-all (cdr x)))
+         (processed (ssaify-all (cdr x)))
          (args (car processed))
          (stmts (cdr processed))
-         (swr (get-swr)))
+         (ssa (get-ssa)))
     (assert (symbol? name) "Expected a symbol head.")
-    (cons swr (suffix stmts
-                      (cons swr (cons name args))))))
+    (cons ssa (suffix stmts
+                      (cons ssa (cons name args))))))
 (define (replace-all x replacements)
   (cond [(assoc x replacements) (cdr (assoc x replacements))]
         [(pair? x) (cons (replace-all (car x) replacements)
@@ -89,32 +89,32 @@
         [(box? x) (set-box! x (replace-all (unbox x) replacements))
                   x]
         [else x]))
-(define (swrify-multi-element x)
-  (let ((swr-out (car x))
-        (swrified (swrify (cdr x) #t)))
-    (when (box? swr-out)
-        (set-box! swr-out (car swrified)))
-    swrified))
-(define (swrify-multi x) ; returns swr-id (swr . code) (swr . code) ...
+(define (ssaify-multi-element x)
+  (let ((ssa-out (car x))
+        (ssaified (ssaify (cdr x) #t)))
+    (when (box? ssa-out)
+        (set-box! ssa-out (car ssaified)))
+    ssaified))
+(define (ssaify-multi x) ; returns ssa-id (ssa . code) (ssa . code) ...
   (let ((targets (map car x)))
     (assert (= 1 (length (filter empty? targets))) "Should be exactly one result preserve!")
     (assert (empty? (last targets)) "The last preserve should be the result preserve!")
-    (let ((replacements (map (lambda (target) (cons target (get-swr)))
+    (let ((replacements (map (lambda (target) (cons target (get-ssa)))
                              (filter (lambda (x) (not (empty? x))) targets))))
-      (let ((processed (map swrify-multi-element (replace-all x replacements))))
+      (let ((processed (map ssaify-multi-element (replace-all x replacements))))
         (cons (car (last processed))
               (append* (map cdr processed)))))))
 
-(define (assign-swr pair)
-  (assert (void? (unbox (cadr pair))) "Expected swr to be unassigned.")
+(define (assign-ssa pair)
+  (assert (void? (unbox (cadr pair))) "Expected ssa to be unassigned.")
   (set-box! (cadr pair) (car pair)))
-(define (assign-swrs x)
-  (map assign-swr (enumerate (cdr x)))
+(define (assign-ssas x)
+  (map assign-ssa (enumerate (cdr x)))
   (strip-boxes x))
 
-; Note that full-swrify will mangle the boxdag's contents.
-(define (full-swrify x)
-  (assign-swrs (swrify-multi x)))
+; Note that full-ssaify will mangle the boxdag's contents.
+(define (full-ssaify x)
+  (assign-ssas (ssaify-multi x)))
 
-;(full-swrify (get-boxdag-contents sample-duplicated-set))
-;(full-swrify sample-complex-set)
+;(full-ssaify (get-boxdag-contents sample-duplicated-set))
+;(full-ssaify sample-complex-set)

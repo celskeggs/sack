@@ -3,7 +3,7 @@
 (require "boxdag.rkt")
 (require "platform.rkt")
 (require "platform-templates.rkt")
-(require "register-allocation.rkt")
+;(require "register-allocation.rkt")
 
 (platform x86
           (register-based eax ebx ecx edx esi edi)
@@ -71,9 +71,9 @@
            
            ; Remember when adding register allocation:
            ; the name forces the register to be eax.
-           [(x86/ret (!eax any?))
+           [(x86/ret)
             ("  ret")
-            (return (get-reg !eax))]
+            (return (get-reg eax))]
            
            [(x86/mov/d (dest any?) (source any?))
             ("  mov " dest ", " source)
@@ -144,4 +144,14 @@ sample
 (displayln "=== OUTPUT ===")
 (define conv (platform-parse x86 sample))
 conv
-(register-allocate conv)
+(define (get-instruction name)
+  (car (filter (lambda (found) (eq? name (instruction-struct-name found))) (platform-struct-instrs x86))))
+(define (single-constraints out-ssa name arguments)
+  (let ((instr (get-instruction name)))
+    (list out-ssa arguments (instruction-struct-arguments instr) (instruction-struct-constraints instr))))
+(single-constraints 4 'x86/call '(fib))
+(define (ssa-constraints blk)
+  (single-constraints (caar blk) (cadar blk) (caddar blk))
+  )
+(ssa-constraints (cdr (cadddr conv)))
+;(register-allocate '(eax ebx ecx edx esi edi) conv)
