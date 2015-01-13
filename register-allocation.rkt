@@ -4,58 +4,7 @@
 
 (provide register-allocate)
 
-(define (register-allocation-required regs block)
-  (let ((return-register (car regs)))
-    (filter-map (lambda (insn)
-                  (cond ((and (eq? (car insn) 'ssa) (eq? (caaddr insn) 'call))
-                         (cons (cadr insn) return-register))
-                        ((and (eq? (car insn) 'return) (eq? (caadr insn) 'ssa))
-                         (cons (cadadr insn) return-register))
-                        (else #f)))
-                block)))
 
-(define (ssa-listing block)
-  (map car block))
-
-(define (ssa-find-unused block)
-  (define (search-listing-from listing i)
-    (cond ((or (empty? listing) (> (car listing) i)) i)
-          ((< (car listing) i) (search-listing-from (cdr listing) i))
-          (else (search-listing-from listing (+ i 1)))))
-  (search-listing-from (sort (ssa-listing block) <) 0))
-
-(define (ssa-find-unused-beginning block)
-  (+ 1 (apply max (cons 0 (ssa-listing block)))))
-
-(define (tree-search haystack needle)
-  (cond ((equal? haystack needle) #t)
-        ((pair? haystack) (or (tree-search (car haystack) needle)
-                              (tree-search (cdr haystack) needle)))
-        (else #f)))
-
-(define (ssa-usage-begin block ssaid)
-  (find-index (lambda (x) (and (eq? (car x) 'ssa) (= (cadr x) ssaid)))
-              block))
-
-(define (ssa-usage-end block ssaid)
-  (find-index (lambda (x) (tree-search x (list 'ssa ssaid)))
-              block))
-
-(define (ssa-usage-ranges block)
-  (map (lambda (ssaid)
-         (list ssaid (ssa-usage-begin block ssaid) (ssa-usage-end block ssaid)))
-       (ssa-listing block)))
-
-(define (ssa-conflicts block)
-  (define (find-conflicts from to)
-    (cond ((empty? to) empty)
-          ((< (second (car to)) (third from)) (cons (list (first from) (first (car to)))
-                                                    (find-conflicts from (cdr to))))
-          (else (find-conflicts from (cdr to)))))
-  (define (ssa-conflicts-i active)
-    (if (empty? active) empty
-        (append (find-conflicts (car active) (cdr active)) (ssa-conflicts-i (cdr active)))))
-  (ssa-conflicts-i (sort (ssa-usage-ranges block) (lambda (a b) (< (second a) (second b))))))
 
 (define (ssa-preferences block)
   (define (ssa-preferences-iter starts ends) ; looks through the list of starts and ends and finds places where one starts and another ends at the same time.

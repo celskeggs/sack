@@ -1,9 +1,9 @@
 #lang racket
 
-(provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions
-         platform-apply platform-process platform-parse register? set-registers! platform-struct-instrs
+(provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
+         platform-apply platform-process platform-parse platform-process-block register? set-registers! platform-struct-instrs platform-struct-reg-remap-op
          ; TEMPORARY
-         instruction instruction-struct-name instruction-struct-constraints instruction-struct-arguments)
+         instruction instruction-struct-name instruction-struct-returns instruction-struct-used-arguments instruction-struct-constraints instruction-struct-arguments)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -15,17 +15,20 @@
 (require "rule-generator.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules) #:mutable #:inspector #f)
+  (name registers instrs rules reg-remap-op) #:mutable #:inspector #f)
 (struct platform-struct
-  (name registers instrs rules) #:inspector #f)
+  (name registers instrs rules reg-remap-op) #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
                    (reverse (mutable-platform-struct-instrs x))
-                   (reverse (mutable-platform-struct-rules x))))
+                   (reverse (mutable-platform-struct-rules x))
+                   (mutable-platform-struct-reg-remap-op x)))
 
 (define-syntax-rule (set-registers! regs)
   (set-mutable-platform-struct-registers! active-platform-ref regs))
+(define-syntax-rule (set-reg-remap-op! op)
+  (set-mutable-platform-struct-reg-remap-op! active-platform-ref op))
 (define (add-platform-rule! platform-ref rule)
   (set-mutable-platform-struct-rules! platform-ref (cons rule (mutable-platform-struct-rules platform-ref))))
 (define (add-platform-instr! platform-ref instr)
@@ -59,7 +62,7 @@
               #:unless (is-trivial-rule rule))
           (add-platform-rule! active-platform-ref rule)))) ...))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void)))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])

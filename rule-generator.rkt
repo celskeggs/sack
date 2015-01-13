@@ -4,6 +4,7 @@
 
 (provide make-instruction
          instruction-struct-name instruction-struct-arguments
+         instruction-struct-returns instruction-struct-used-arguments
          instruction-struct-string-gen instruction-struct-behavior
          instruction-struct-rules instruction-struct-constraints)
 
@@ -12,7 +13,7 @@
 (require "boxdag-rules.rkt")
 
 (struct instruction-struct
-  (name arguments string-gen behavior rules constraints) #:inspector #f)
+  (name arguments returns used-arguments string-gen behavior rules constraints) #:inspector #f)
 
 ; arguments: ((name predicate) ...)
 (define (convert-behavior-expr arguments constraints behavior)
@@ -37,13 +38,14 @@
         (else
          (cons (car behavior) (map (curry convert-behavior-expr arguments constraints) (cdr behavior)))))))
 
-(define (convert-behavior-line arguments constraints behavior)
+(define (convert-behavior-line arguments returns constraints behavior)
   (case (car behavior)
     ('set-reg
      (assert (= (length behavior) 3) "set-reg expects two arguments")
      (unless (assoc (second behavior) (unbox arguments))
        (set-box! arguments (cons (list (second behavior) any?) (unbox arguments)))
        (set-box! constraints (cons (cons (second behavior) (second behavior)) (unbox constraints))))
+     (set-box! returns (cons (second behavior) (unbox returns)))
      (convert-behavior-expr arguments constraints (third behavior)))
     ('discard
      (assert (= (length behavior) 2) "discard expects one argument")
@@ -84,21 +86,23 @@
          (let ((reg-name (if (eq? (car indirect-behavior) 'set-reg) (second indirect-behavior) 'generic/unknown)))
            (list 'generic/subresult conv-id reg-name (cons name (map car arguments))))))))
 
-
-(define (convert-behavior name arguments behavior constraints) ; doing: should return rules, not rule
+(define (convert-behavior name arguments returns behavior constraints)
   (if (eq? (car behavior) 'multiple)
-      (let* ((convs (map (curry convert-behavior-line arguments constraints) (cdr behavior)))
+      (let* ((convs (map (curry convert-behavior-line arguments returns constraints) (cdr behavior)))
              (used-arguments (filter (curry check-used-in convs) (unbox arguments))))
-        (map (curry build-converted-rule name used-arguments) (cdr behavior) (enumerate convs)))
-      (let* ((conv (convert-behavior-line arguments constraints behavior))
+        (cons used-arguments
+              (map (curry build-converted-rule name used-arguments) (cdr behavior) (enumerate convs))))
+      (let* ((conv (convert-behavior-line arguments returns constraints behavior))
              (used-arguments (filter (curry check-used-in conv) (unbox arguments))))
-        (list (build-converted-rule name used-arguments #f (cons null conv))))))
+        (cons used-arguments
+              (list (build-converted-rule name used-arguments #f (cons null conv)))))))
 
 (define (make-instruction name args string-gen behavior constraints)
   (let* ((mut-args (box args))
          (mut-constraints (box constraints))
-         (behavior-out (convert-behavior name mut-args behavior mut-constraints)))
-    (instruction-struct name (unbox mut-args) string-gen behavior behavior-out (unbox mut-constraints))))
+         (mut-rets (box null))
+         (behavior-out (convert-behavior name mut-args mut-rets behavior mut-constraints)))
+    (instruction-struct name (unbox mut-args) (unbox mut-rets) (car behavior-out) string-gen behavior (cdr behavior-out) (unbox mut-constraints))))
 
 ;(convert-behavior 'x86/cmp/dd '((a any?) (b any?))
 ;                  '(multiple

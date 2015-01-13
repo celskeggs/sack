@@ -5,10 +5,11 @@
 (require "common.rkt")
 (require "platform.rkt")
 
-(define-syntax-rule (register-based reg ...)
+(define-syntax-rule (register-based remap-op (reg ...))
   (begin
     (define registers '(reg ...))
     (set! register? (lambda (r) (and (member r registers) #t)))
+    (set-reg-remap-op! 'remap-op)
     (set-registers! registers)))
 (define-syntax-rule (argument-behavior argname contents)
   (reduction-simple (arg (argname any?)) contents))
