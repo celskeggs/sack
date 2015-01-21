@@ -1,6 +1,6 @@
 #lang racket
 
-(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique)
+(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique map-curry without-presorted)
 
 (define (zip a b)
   (cond ((and (empty? a) (empty? b)) empty)
@@ -60,11 +60,18 @@
 (define (unique-i seq)
   (cond ((empty? seq) empty)
         ((empty? (cdr seq)) seq)
-        ((eq? (first seq) (second seq)) (unique-i (cdr seq)))
+        ((equal? (first seq) (second seq)) (unique-i (cdr seq)))
         (else (cons (first seq) (unique-i (cdr seq))))))
 
-;(define (symbol<? a b)
-;  (string<? (symbol->string a) (symbol->string b)))
+(define (unique x #:cmp< [comparer symbol<?])
+  (unique-i (sort x comparer)))
 
-(define (unique x)
-  (unique-i (sort x symbol<?)))
+(define-syntax-rule (map-curry func args ... list)
+  (map (curry func args ...) list))
+
+(define (without-presorted coll without #:cmp< comparer)
+  (cond ((empty? coll) empty)
+        ((empty? without) coll)
+        ((comparer (car coll) (car without)) (cons (car coll) (without-presorted (cdr coll) without #:cmp< comparer)))
+        ((comparer (car without) (car coll)) (without-presorted coll (cdr without) #:cmp< comparer))
+        (else (without-presorted (cdr coll) without #:cmp< comparer))))
