@@ -91,7 +91,6 @@
   (void))
 
 (define (map-join a b)
-  (trace 'MAP-JOIN a b)
   (cond ((empty? a) b)
         ((assoc (caar a) b)
          (assert (equal? (cadar a) (second (assoc (caar a) b))) "map-join got conflicting values!")

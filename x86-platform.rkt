@@ -86,51 +86,51 @@
             (set-reg dest source)]
            
            [(x86/jmp (target number?))
-            ("  jmp " target)
+            ("  jmp .c" target)
             (goto target)]
            
            [(x86/je (source any?) (target number?))
-            ("  je " target)
+            ("  je .c" target)
             (goto-if (generic/subresult _ zero-flag source) target)]
            
            [(x86/jne (source any?) (target number?))
-            ("  jne " target)
+            ("  jne .c" target)
             (goto-if-not (generic/subresult _ zero-flag source) target)]
            
            [(x86/jb (source any?) (target number?))
-            ("  jb " target)
+            ("  jb .c" target)
             (goto-if (generic/subresult _ carry-flag source) target)]
            
            [(x86/jae (source any?) (target number?))
-            ("  jnb " target)
+            ("  jnb .c" target)
             (goto-if-not (generic/subresult _ carry-flag source) target)]
            
            [(x86/jbe (source any?) (target number?))
-            ("  jbe " target)
+            ("  jbe .c" target)
             (goto-if (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ carry-flag source)) target)]
            
            [(x86/ja (source any?) (target number?))
-            ("  ja " target)
+            ("  ja .c" target)
             (goto-if-not (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ carry-flag source)) target)]
            
            [(x86/jl (source any?) (target number?))
-            ("  jl " target)
+            ("  jl .c" target)
             (goto-if (generic/subresult _ sign-flag-xor-overflow-flag source) target)]
            
            [(x86/jge (source any?) (target number?))
-            ("  jge " target)
+            ("  jge .c" target)
             (goto-if-not (generic/subresult _ sign-flag-xor-overflow-flag source) target)]
            
            [(x86/jle (source any?) (target number?))
-            ("  jle " target)
+            ("  jle .c" target)
             (goto-if (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ sign-flag-xor-overflow-flag source)) target)]
            
            [(x86/jg (source any?) (target number?))
-            ("  jg " target)
+            ("  jg .c" target)
             (goto-if-not (logical/or (generic/subresult _ zero-flag source) (generic/subresult _ sign-flag-xor-overflow-flag source)) target)]
            
            [(x86/jecxz (source any?) (target number?))
-            ("  jecxz " source target)
+            ("  jecxz .c" source target)
             (goto-if-not source target)]
            ))
 
@@ -145,6 +145,6 @@
 sample
 (displayln "=== OUTPUT ===")
 (define conv (platform-parse x86 sample))
-conv
-(register-constrain x86 conv)
+;conv
+;(register-constrain x86 conv)
 (register-allocate x86 '(eax ebx ecx edx esi edi) conv)
