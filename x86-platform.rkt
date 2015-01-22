@@ -5,7 +5,7 @@
 (require "platform.rkt")
 (require "platform-templates.rkt")
 (require "register-constraints.rkt")
-;(require "register-allocation.rkt")
+(require "register-allocation.rkt")
 
 (platform x86
           (register-based x86/mov/d (eax ebx ecx edx esi edi))
@@ -147,4 +147,4 @@ sample
 (define conv (platform-parse x86 sample))
 conv
 (register-constrain x86 conv)
-;(register-allocate '(eax ebx ecx edx esi edi) conv)
+(register-allocate x86 '(eax ebx ecx edx esi edi) conv)

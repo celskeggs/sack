@@ -49,7 +49,7 @@
                       (list string-part ...))
                     'instr-behavior
                     empty))
-(define (is-trivial-rule rule)
+(define (is-trivial-rule rule) ; TODO: Use this to autoselect register movement operation.
   (and (symbol? (boxdag-rule-find rule))
        (= (length (boxdag-rule-args rule)) 1)
        (equal? (cdar (boxdag-rule-args rule)) any?)))
@@ -78,8 +78,9 @@
     (cons name (cons args (cons rettype (map (curry platform-process-block platform) body))))))
 (define (platform-process-block platform block)
   (assert (= (length block) 1) "Can only process one statement per block. (TODO)")
-  ; Note that full-ssaify will mangle the boxdag's contents, but that's fine here.
-  (full-ssaify (get-boxdag-contents (platform-process platform (car block)))))
+  (let ((boxdag-extracted (get-boxdag-contents (platform-process platform (car block)))))
+    ; Note that full-ssaify will mangle the boxdag's contents, but that's fine here.
+    (full-ssaify (platform-struct-reg-remap-op platform) boxdag-extracted)))
 (define (platform-apply platform boxdag)
   (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
   boxdag)

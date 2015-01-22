@@ -1,6 +1,6 @@
 #lang racket
 
-(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique map-curry without-presorted)
+(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique map-curry without-presorted and* map->list comment map-join)
 
 (define (zip a b)
   (cond ((and (empty? a) (empty? b)) empty)
@@ -75,3 +75,25 @@
         ((comparer (car coll) (car without)) (cons (car coll) (without-presorted (cdr coll) without #:cmp< comparer)))
         ((comparer (car without) (car coll)) (without-presorted coll (cdr without) #:cmp< comparer))
         (else (without-presorted (cdr coll) without #:cmp< comparer))))
+
+(define (and* list)
+  (or (empty? list) (and (car list) (and* (cdr list)))))
+
+(define (map->list mapping)
+  (let ((keys (unique (map first mapping) #:cmp< <)))
+    (assert (= (length keys) (length mapping)) "Expected no duplicate keys!")
+    (assert (and* (map integer? keys)) "Keys must be integers!")
+    (assert (= (apply min keys) 0) "Keys must start at zero!")
+    (assert (= (apply max keys) (- (length keys) 1)) "Keys must end at length-1!")
+    (map (lambda (i) (second (assoc i mapping))) (range 0 (length keys)))))
+
+(define-syntax-rule (comment arg ...)
+  (void))
+
+(define (map-join a b)
+  (trace 'MAP-JOIN a b)
+  (cond ((empty? a) b)
+        ((assoc (caar a) b)
+         (assert (equal? (cadar a) (second (assoc (caar a) b))) "map-join got conflicting values!")
+         (map-join (cdr a) b))
+        (else (cons (car a) (map-join (cdr a) b)))))

@@ -3,7 +3,7 @@
 (require "utilities.rkt")
 (require "boxdag.rkt")
 
-(provide boxdag-rule apply-boxdag-rules-all boxdag-rule-args boxdag-rule-find boxdag-rule-repl)
+(provide boxdag-rule apply-boxdag-rules-all apply-boxdag-rule-once boxdag-rule-args boxdag-rule-find boxdag-rule-repl)
 
 (struct boxdag-rule
   (args   ; ((argument-name . predicate) ...)
