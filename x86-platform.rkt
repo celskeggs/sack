@@ -6,17 +6,17 @@
 (require "platform-templates.rkt")
 (require "register-constraints.rkt")
 (require "register-allocation.rkt")
+(require "stringify.rkt")
 
 (platform x86
           (register-based x86/mov/d (eax ebx ecx edx esi edi))
           (argument-behavior argid (get-memory (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4))))))
-          (reduction-simple (get-memory (c const?))
-                            (x86/get-memory/c c))
-          (reduction-advanced (a any?) (b const?)
-                              (get-memory (+ a b))
-                              (x86/get-memory/dc a b))
-          (reduction-simple (get-memory (a any?))
-                            (x86/get-memory/d a))
+          (label-framing-code (blockid)
+                              (".c" blockid ":")
+                              ())
+          (function-framing-code (name locals)
+                                 ("section .text\nglobal _" name "\n_" name ":\n  push ebp\n  mov ebp, esp\n  sub esp, 4*" locals)
+                                 (".ret:\n  mov esp, ebp\n  pop ebp\n  ret"))
           (call-behavior-forward ; first argument to last argument
            (arg (push arg)) ; handle adding arguments
            (arg (pop))) ; handle removing arguments
@@ -25,11 +25,15 @@
           (instructions
            [(x86/movfm/c (dest any?) (source const?))
             ("  mov " dest ", [" source "]")
-            (set-reg dest (x86/get-memory/c source))]
+            (set-reg dest (get-memory source))]
+           
+           [(x86/movfm/dc (dest any?) (source any?) (offset const?))
+            ("  mov " dest ", [" source "+" offset "]")
+            (set-reg dest (get-memory (+ (get-reg source) offset)))]
            
            [(x86/movfm/d (dest any?) (source any?))
             ("  mov " dest ", [" source "]")
-            (set-reg dest (x86/get-memory/d (get-reg source)))]
+            (set-reg dest (get-memory (get-reg source)))]
            
            [(x86/add/dc (dest any?) (source const?))
             ("  add " dest ", " source)
@@ -48,7 +52,7 @@
             (set-reg dest (- (get-reg dest) (get-reg source)))]
            
            [(x86/call (target symbol?))
-            ("  call " target)
+            ("  call _" target)
             (set-reg eax (call-raw target))]
            
            [(x86/push/c (source const?))
@@ -63,6 +67,14 @@
             ("  pop " dest)
             (set-reg dest (pop))]
            
+           [(x86/cmp/dc (a any?) (b const?))
+            ("  cmp " a ", " b)
+            (multiple
+             (set-reg carry-flag (unsigned< (get-reg a) b))
+             (set-reg zero-flag (= (get-reg a) b))
+             (set-reg sign-flag-xor-overflow-flag (< (get-reg a) b))
+             )]
+           
            [(x86/cmp/dd (a any?) (b any?)) ; NAMEP, minus /es
             ("  cmp " a ", " b)
             (multiple
@@ -71,10 +83,8 @@
              (set-reg sign-flag-xor-overflow-flag (< (get-reg a) (get-reg b)))
              )]
            
-           ; Remember when adding register allocation:
-           ; the name forces the register to be eax.
            [(x86/ret)
-            ("  ret")
+            ("  jmp .ret")
             (return (get-reg eax))]
            
            [(x86/mov/d (dest any?) (source any?))
@@ -147,4 +157,4 @@ sample
 (define conv (platform-parse x86 sample))
 ;conv
 ;(register-constrain x86 conv)
-(register-allocate x86 '(eax ebx ecx edx esi edi) conv)
+(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))

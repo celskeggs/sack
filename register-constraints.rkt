@@ -57,7 +57,7 @@
       ;(trace 'ARGIFY i-args tmap)
       (assert (equal? (sort (map car i-args) symbol<?)
                       (sort (map car tmap) symbol<?)) "Key mismatch!")
-      (cons name (map (lambda (key) (remove-get-reg (second (assoc (car key) tmap)))) i-args))))
+      (cons name (map (lambda (pair) (list (first pair) (remove-get-reg (second pair)))) tmap))));(map (lambda (key) (remove-get-reg (second (assoc (car key) tmap)))) i-args))))
   (define (block-argify block)
     (map single-argify block))
   (map block-argify code))

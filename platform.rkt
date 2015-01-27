@@ -2,6 +2,7 @@
 
 (provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
          platform-apply platform-process platform-parse platform-process-block register? set-registers! platform-struct-instrs platform-struct-reg-remap-op
+         label-framing-code function-framing-code platform-struct-label-framing platform-struct-function-framing
          ; TEMPORARY
          instruction instruction-struct-name instruction-struct-returns instruction-struct-used-arguments instruction-struct-constraints instruction-struct-arguments)
 
@@ -15,15 +16,17 @@
 (require "rule-generator.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules reg-remap-op) #:mutable #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing) #:mutable #:inspector #f)
 (struct platform-struct
-  (name registers instrs rules reg-remap-op) #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing) #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
                    (reverse (mutable-platform-struct-instrs x))
                    (reverse (mutable-platform-struct-rules x))
-                   (mutable-platform-struct-reg-remap-op x)))
+                   (mutable-platform-struct-reg-remap-op x)
+                   (mutable-platform-struct-label-framing x)
+                   (mutable-platform-struct-function-framing x)))
 
 (define-syntax-rule (set-registers! regs)
   (set-mutable-platform-struct-registers! active-platform-ref regs))
@@ -33,6 +36,15 @@
   (set-mutable-platform-struct-rules! platform-ref (cons rule (mutable-platform-struct-rules platform-ref))))
 (define (add-platform-instr! platform-ref instr)
   (set-mutable-platform-struct-instrs! platform-ref (cons instr (mutable-platform-struct-instrs platform-ref))))
+
+(define-syntax-rule (label-framing-code (blockid) (start ...) (end ...))
+  (set-mutable-platform-struct-label-framing! active-platform-ref
+                                              (list (lambda (blockid) (list start ...))
+                                                    (lambda (blockid) (list end ...)))))
+(define-syntax-rule (function-framing-code (name locals) (start ...) (end ...))
+  (set-mutable-platform-struct-function-framing! active-platform-ref
+                                              (list (lambda (name locals) (list start ...))
+                                                    (lambda (name locals) (list end ...)))))
 
 (define-syntax-parameter active-platform-ref
   (lambda (stx)
@@ -45,8 +57,9 @@
                                  instr-behavior)
   (make-instruction 'name
                     (list (list 'arg-name arg-type) ...)
-                    (lambda (arg-name ...)
-                      (list string-part ...))
+                    (lambda (mapping)
+                      (let ((arg-name (second (assoc 'arg-name mapping))) ...)
+                        (list string-part ...)))
                     'instr-behavior
                     empty))
 (define (is-trivial-rule rule) ; TODO: Use this to autoselect register movement operation.
@@ -62,7 +75,7 @@
               #:unless (is-trivial-rule rule))
           (add-platform-rule! active-platform-ref rule)))) ...))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void)))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void)))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])
