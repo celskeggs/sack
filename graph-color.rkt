@@ -17,9 +17,16 @@
   (map (curry remap-nums remaps) cmap))
 
 (define (unmap remaps rmap)
-  (define (unmap-get pair)
-    (list (second pair) (second (assoc (car pair) rmap))))
-  (sort (append rmap (map unmap-get remaps)) pair<?))
+  (define rev-map (map reverse remaps))
+  (define (unmap-get num)
+    (let ((lkup (assoc num rmap)))
+      (if lkup (second lkup)
+          (let ((next (assoc num rev-map)))
+            (assert next "Expected to find lookup or remap in remapping maps:" num rmap rev-map)
+            (unmap-get (second next))))))
+  (define (unmap-pair pair)
+    (list (second pair) (unmap-get (car pair))))
+  (sort (append rmap (map unmap-pair remaps)) pair<?))
 
 (define (num-sort x)
   (sort x <))
@@ -67,11 +74,25 @@
          (forced-names-rev (map reverse forced-names))
          (known-out (map (lambda (x) (list (first x) (second (assoc (second x) forced-names-rev)))) known-remapped)))
     (list forced-names
-          (unmap remaps (graph-color-main
-                         remaining
-                         known-out
-                         conflicts
-                         preferences)))))
+          (graph-color-verify forced conflict (unmap remaps (graph-color-main
+                                                             remaining
+                                                             known-out
+                                                             conflicts
+                                                             preferences))))))
+
+(define (graph-color-verify forces conflicts mapping)
+  (define (verify-forced force)
+    (when (and (number? (first force)) (number? (second force)))
+      (let* ((color-a (second (assoc (first force) mapping)))
+             (color-b (second (assoc (second force) mapping))))
+        (assert (= color-a color-b) "Graph color verification failed: mismatched colors!"))))
+  (define (verify-conflict conflict)
+    (let* ((color-a (second (assoc (first conflict) mapping)))
+           (color-b (second (assoc (second conflict) mapping))))
+      (assert (not (= color-a color-b)) "Graph color verification failed: conflicting colors!")))
+  (map verify-forced forces)
+  (map verify-conflict conflicts)
+  mapping)
           
   ;(graph-color-noforce (remap known remaps) (remap conflict remaps) (remap preference remaps)))
 

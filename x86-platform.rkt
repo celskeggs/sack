@@ -151,6 +151,7 @@
                             (fib (- n 2))))))
 (define math-sample '(math ((a u4) (b u4)) u4
                            (+ a b)))
+
 (displayln "=== INPUT ===")
 sample
 (displayln "=== OUTPUT ===")
@@ -158,3 +159,5 @@ sample
 ;conv
 ;(register-constrain x86 conv)
 (displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))
+
+(provide x86 conv)

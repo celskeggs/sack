@@ -25,10 +25,10 @@
   (print args)
   (newline))
 
-(define (assert x failmsg)
+(define-syntax-rule (assert x failmsg ...)
   (if x
       x
-      (error failmsg)))
+      (error (string-join (list (~a failmsg) ...) " "))))
 
 (define (find-index-i predicate sequence i)
   (cond ((empty? sequence) (error "No match in list!"))
