@@ -3,3 +3,5 @@
 *.s
 test
 compiled
+*.bak
+*.exe
