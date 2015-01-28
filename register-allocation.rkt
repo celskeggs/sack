@@ -7,8 +7,9 @@
 (provide register-allocate)
 
 (define (register-allocate platform regs input)
-  (instructions-argify platform
-                       (map-curry register-allocate-real regs (register-constrain platform input))))
+  (let ((unargified (map-curry register-allocate-real regs (register-constrain platform input))))
+    (list (instructions-argify platform (map car unargified))
+          (unique (filter (lambda (x) (member x regs)) (append* (map cdr unargified))) #:cmp< symbol<?))))
 
 (define (pair<? a b)
   (or (< (first a) (first b))
@@ -65,14 +66,15 @@
   (let* ((seq (first block))
          (code (cdr seq))
          (constraints (second block))
-         (all-ssas (map car code)))
-    (insert-ssas code
-                 (apply (curry assign-registers regs)
-                        (tuple-capable-graph-color regs
-                                                   all-ssas
-                                                   (first constraints)
-                                                   (second constraints)
-                                                   (third constraints))))))
+         (all-ssas (map car code))
+         (colored (tuple-capable-graph-color regs
+                                             all-ssas
+                                             (first constraints)
+                                             (second constraints)
+                                             (third constraints)))
+         (assigned (apply (curry assign-registers regs) colored)))
+    (cons (insert-ssas code (car assigned))
+          (cdr assigned))))
 
 (define (assign-registers regs tuple-abbrevs forced-regs layout)
   (define (get-unabbrev lookup)
@@ -85,9 +87,10 @@
          (unused-regs (without regs (map second forced-regs))))
     (assert (<= (length unspecified-ssas) (length unused-regs)) "Insufficient registers... need to implement spilling!")
     (let ((lookup (append forced-regs (zip unspecified-ssas (take unused-regs (length unspecified-ssas))))))
-      (map (lambda (pair) (list (get-unabbrev (first pair))
-                                (second (assoc (second pair) lookup))))
-           layout))))
+      (cons (map (lambda (pair) (list (get-unabbrev (first pair))
+                                      (second (assoc (second pair) lookup))))
+                 layout)
+            (map second lookup)))))
 
 (define (insert-ssas code tupled-ssas)
   (define ssa-ids (map first tupled-ssas))

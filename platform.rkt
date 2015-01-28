@@ -41,10 +41,10 @@
   (set-mutable-platform-struct-label-framing! active-platform-ref
                                               (list (lambda (blockid) (list start ...))
                                                     (lambda (blockid) (list end ...)))))
-(define-syntax-rule (function-framing-code (name locals) (start ...) (end ...))
+(define-syntax-rule (function-framing-code (name locals touched) (start ...) (end ...))
   (set-mutable-platform-struct-function-framing! active-platform-ref
-                                              (list (lambda (name locals) (list start ...))
-                                                    (lambda (name locals) (list end ...)))))
+                                              (list (lambda (name locals touched) (list start ...))
+                                                    (lambda (name locals touched) (list end ...)))))
 
 (define-syntax-parameter active-platform-ref
   (lambda (stx)

@@ -14,9 +14,25 @@
           (label-framing-code (blockid)
                               (".c" blockid ":")
                               ())
-          (function-framing-code (name locals)
-                                 ("section .text\nglobal _" name "\n_" name ":\n  push ebp\n  mov ebp, esp\n  sub esp, 4*" locals)
-                                 (".ret:\n  mov esp, ebp\n  pop ebp\n  ret"))
+          (function-framing-code (name locals touched)
+                                 ("section .text\n"
+                                  "global _" name "\n"
+                                  "_" name ":\n"
+                                  "  push ebp\n"
+                                  "  mov ebp, esp\n"
+                                  (string-append* (map-curry format "  push ~s\n"
+                                                             (filter-not (lambda (x)
+                                                                           (member x '(eax ecx edx)))
+                                                                         touched)))
+                                  "  sub esp, 4*" locals)
+                                 (".ret:\n"
+                                  (string-append* (map-curry format "  pop ~s\n"
+                                                             (filter-not (lambda (x)
+                                                                           (member x '(eax ecx edx)))
+                                                                         touched)))
+                                  "  mov esp, ebp\n"
+                                  "  pop ebp\n"
+                                  "  ret"))
           (call-behavior-forward ; first argument to last argument
            (arg (push arg)) ; handle adding arguments
            (arg (pop))) ; handle removing arguments
@@ -53,7 +69,10 @@
            
            [(x86/call (target symbol?))
             ("  call _" target)
-            (set-reg eax (call-raw target))]
+            (multiple
+             (set-reg eax (call-raw target))
+             (set-reg ecx (generic/undefined))
+             )]
            
            [(x86/push/c (source const?))
             ("  push " source)
@@ -158,6 +177,6 @@ sample
 (define conv (platform-parse x86 sample))
 ;conv
 ;(register-constrain x86 conv)
-(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))
+;(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))
 
 (provide x86 conv)
