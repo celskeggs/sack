@@ -22,7 +22,7 @@
   (append seq (list end)))
 
 (define (trace . args)
-  (print args)
+  (pretty-print args)
   (newline))
 
 (define-syntax-rule (assert x failmsg ...)

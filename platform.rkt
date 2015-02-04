@@ -94,8 +94,13 @@
   (let ((boxdag-extracted (get-boxdag-contents (platform-process platform (car block)))))
     ; Note that full-ssaify will mangle the boxdag's contents, but that's fine here.
     (full-ssaify (platform-struct-reg-remap-op platform) boxdag-extracted)))
+(define pre-preservation-rules
+  (list (boxdag-rule
+         `((id . ,number?) (reg . ,symbol?) (base . ,any?) (ref . ,any?))
+         '(boxdag/preserve-ref-prepared ref (generic/subresult id reg base))
+         '(boxdag/preserve-ref-prepared-immediate ref (generic/subresult id reg (boxdag/preserve base))))))
 (define (platform-apply platform boxdag)
-  (apply-boxdag-rules-all (platform-struct-rules platform) boxdag)
+  (apply-boxdag-rules-all (append pre-preservation-rules (platform-struct-rules platform)) boxdag #:avoid-preserve '(generic/subresult call-raw))
   boxdag)
 (define (platform-process platform input)
   (platform-apply platform (make-boxdag input)))

@@ -29,7 +29,7 @@
                                   (string-append* (map-curry format "  pop ~s\n"
                                                              (filter-not (lambda (x)
                                                                            (member x '(eax ecx edx)))
-                                                                         touched)))
+                                                                         (reverse touched))))
                                   "  mov esp, ebp\n"
                                   "  pop ebp\n"
                                   "  ret"))
@@ -72,6 +72,7 @@
             (multiple
              (set-reg eax (call-raw target))
              (set-reg ecx (generic/undefined))
+             (set-reg edx (generic/undefined))
              )]
            
            [(x86/push/c (source const?))
@@ -168,6 +169,8 @@
                          1
                          (+ (fib (- n 1))
                             (fib (- n 2))))))
+
+
 (define math-sample '(math ((a u4) (b u4)) u4
                            (+ a b)))
 
@@ -175,8 +178,10 @@
 sample
 (displayln "=== OUTPUT ===")
 (define conv (platform-parse x86 sample))
-;conv
-;(register-constrain x86 conv)
-;(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))
+(provide conv)
+conv
+(register-constrain x86 conv)
+(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))
 
-(provide x86 conv)
+
+(provide x86)

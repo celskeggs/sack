@@ -102,7 +102,10 @@
          (mut-constraints (box constraints))
          (mut-rets (box null))
          (behavior-out (convert-behavior name mut-args mut-rets behavior mut-constraints)))
-    (instruction-struct name (unbox mut-args) (unbox mut-rets) (car behavior-out) string-gen behavior (cdr behavior-out) (unbox mut-constraints))))
+    (instruction-struct name (unbox mut-args)
+                        (reverse (unbox mut-rets)) (car behavior-out)
+                        string-gen behavior (cdr behavior-out)
+                        (unbox mut-constraints))))
 
 ;(convert-behavior 'x86/cmp/dd '((a any?) (b any?))
 ;                  '(multiple

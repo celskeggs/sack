@@ -74,11 +74,9 @@
          (forced-names-rev (map reverse forced-names))
          (known-out (map (lambda (x) (list (first x) (second (assoc (second x) forced-names-rev)))) known-remapped)))
     (list forced-names
-          (graph-color-verify forced conflict (unmap remaps (graph-color-main
-                                                             remaining
-                                                             known-out
-                                                             conflicts
-                                                             preferences))))))
+          (graph-color-verify forced conflict (unique
+                                               (unmap remaps (graph-color-main remaining known-out conflicts preferences))
+                                               #:cmp< pair<?)))))
 
 (define (graph-color-verify forces conflicts mapping)
   (define (verify-forced force)
