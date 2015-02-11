@@ -4,12 +4,13 @@
 (require "register-constraints.rkt")
 (require "graph-color.rkt")
 
-(provide register-allocate register-allocate-real)
+(provide register-allocate register-allocate-real register-allocation-used-registers)
+
+(define (register-allocation-used-registers regs unargified)
+  (unique (filter (lambda (x) (member x regs)) (append* (map cdr unargified))) #:cmp< symbol<?))
 
 (define (register-allocate platform regs input)
-  (let ((unargified (map-curry register-allocate-real regs (register-constrain platform input))))
-    (list (instructions-argify platform (map car unargified))
-          (unique (filter (lambda (x) (member x regs)) (append* (map cdr unargified))) #:cmp< symbol<?))))
+  (map-curry register-allocate-real regs input))
 
 (define (pair<? a b)
   (or (< (first a) (first b))

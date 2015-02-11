@@ -2,7 +2,7 @@
 
 (provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
          platform-apply platform-process platform-parse platform-process-block register? set-registers! label-framing-code function-framing-code
-         platform-struct-pipeline platform-struct-registers)
+         platform-struct-pipeline platform-struct-registers run-platform-pipeline)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -94,10 +94,14 @@
                                                              (map-curry platform-process-block platform (cdddr linear-source)))
                                       (platform-pipeline-def (platform ssa-assembly register-constraints)
                                                              (register-constrain platform ssa-assembly))
-                                      (platform-pipeline-def (platform ssa-assembly register-assembly)
-                                                             (register-allocate platform (platform-struct-registers platform) ssa-assembly))
-                                      (platform-pipeline-def (platform register-assembly source-header textual-assembly)
-                                                             (stringify platform (car source-header) register-assembly 0))
+                                      (platform-pipeline-def (platform register-constraints register-unargified)
+                                                             (register-allocate platform (platform-struct-registers platform) register-constraints))
+                                      (platform-pipeline-def (platform register-unargified register-assembly)
+                                                             (instructions-argify platform (map car register-unargified)))
+                                      (platform-pipeline-def (platform register-unargified registers-touched)
+                                                             (register-allocation-used-registers (platform-struct-registers platform) register-unargified))
+                                      (platform-pipeline-def (platform register-assembly registers-touched source-header textual-assembly)
+                                                             (stringify platform (car source-header) register-assembly registers-touched 0))
                                       ; end default pipeline
                                       entry ...)
                  (finalize-platform platform-def))))
@@ -153,3 +157,13 @@
                                    (lambda (vars)
                                      (let ((arg (cdr (assoc 'arg vars))) ...)
                                        repl)))))
+
+(define (run-platform-pipeline platform code)
+  (define (reporter data-type data)
+    (if (void? data)
+        (displayln (string-append "=== " (~a data-type) " ==="))
+        (if (string? data)
+            (displayln data)
+            (pretty-print data))))
+  (pipe-run-sched platform (platform-struct-pipeline platform) code 'lisplike-source 'textual-assembly #:reporter reporter)
+  (void))

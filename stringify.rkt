@@ -29,14 +29,12 @@
           (list (string-append* (map stringify-elem
                                      ((second (platform-struct-label-framing plat)) (car seq)))))))
 
-(define (stringify plat name seqs-and-touched locals)
-  (let ((seqs (first seqs-and-touched))
-        (touched (second seqs-and-touched)))
-    (string-join
-     (append* (append
-               (list (list (string-append* (map stringify-elem
-                                                ((first (platform-struct-function-framing plat)) name locals touched)))))
-               (map-curry stringify-block plat (enumerate seqs))
-               (list (list (string-append* (map stringify-elem
-                                                ((second (platform-struct-function-framing plat)) name locals touched)))))))
-     "\n")))
+(define (stringify plat name seqs touched locals)
+  (string-join
+   (append* (append
+             (list (list (string-append* (map stringify-elem
+                                              ((first (platform-struct-function-framing plat)) name locals touched)))))
+             (map-curry stringify-block plat (enumerate seqs))
+             (list (list (string-append* (map stringify-elem
+                                              ((second (platform-struct-function-framing plat)) name locals touched)))))))
+   "\n"))

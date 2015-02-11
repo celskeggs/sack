@@ -49,20 +49,23 @@
                   (let ((last-transformer (get-outputting-transformer (pipeline-transformers pipeline) remain)))
                     (cons last-transformer (append* (map iter (pipeline-transformer-input-types last-transformer))))))))))
 
-(define (pipe-run platform known remaining)
+(define (do-nothing) (void))
+
+(define (pipe-run platform known remaining #:reporter (reporter do-nothing))
   (if (empty? remaining)
       known
       (let* ((wanted (car remaining))
              (others (cdr remaining))
              (wanted-arguments (pipeline-transformer-input-types wanted))
              (wanted-type (pipeline-transformer-output-type wanted))
-             ;(_ (trace 'W-T wanted-type known remaining))
-             (arguments (map (lambda (arg) (second (assoc arg known))) wanted-arguments))
-             (value (apply (pipeline-transformer-function wanted) (cons platform arguments))))
-        (pipe-run platform (cons (list wanted-type value) known) others))))
+             (arguments (map (lambda (arg) (second (assoc arg known))) wanted-arguments)))
+        (reporter wanted-type (void))
+        (let ((result (apply (pipeline-transformer-function wanted) (cons platform arguments))))
+          (reporter wanted-type result)
+          (pipe-run platform (cons (list wanted-type result) known) others #:reporter reporter)))))
 
-(define (pipe-run-sched platform pipeline input input-type output-type)
-  (pipe-run platform (list (list input-type input)) (pipe-sched pipeline input-type output-type)))
+(define (pipe-run-sched platform pipeline input input-type output-type #:reporter (reporter do-nothing))
+  (pipe-run platform (list (list input-type input)) (pipe-sched pipeline input-type output-type) #:reporter reporter))
 
 (define (pipe-run-sched-single platform pipeline input input-type output-type)
   (second (assoc output-type (pipe-run-sched platform pipeline input input-type output-type))))

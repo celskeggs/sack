@@ -175,15 +175,5 @@
 
 (define math-sample '(math ((a u4) (b u4)) u4
                            (+ a b)))
-(displayln "=== INPUT ===")
-sample
-(displayln "=== OUTPUT ===")
-(displayln (pipe-run-sched-single x86 (platform-struct-pipeline x86) sample 'lisplike-source 'textual-assembly))
-;(pipe-sched (platform-struct-pipeline x86) 'lisplike-source 'textual-assembly)
-;(define conv (platform-parse x86 sample))
-;(provide conv)
-;conv
-;(register-constrain x86 conv)
-;(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) (cdddr conv)) 0))
 
-(provide x86)
+(run-platform-pipeline x86 sample)
