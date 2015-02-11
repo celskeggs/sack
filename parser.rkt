@@ -4,12 +4,6 @@
 
 (provide parse)
 
-(define sample '(fib ((n u4)) u4
-                     (if (<= n 1)
-                         1
-                         (+ (fib (- n 1))
-                            (fib (- n 2))))))
-
 (define (parse-arg args)
   ; Note that enumerate adds a prefix to the arguments
   (assert (and (= (length args) 3) (number? (car args)) (symbol? (cadr args)) (symbol? (caddr args))) "Expected two symbols per argument.")
@@ -36,7 +30,11 @@
         ((assoc tree vars) (var-expr (assoc tree vars)))
         (else (error "Cannot parse expression" tree))))
 
+(define (is-jumper tree)
+  (and (pair? tree) (eq? (car tree) 'if)))
+
 (define (parse-stmt tree vars retexpr)
+  (trace 'parse-stmt tree vars retexpr)
   (cond ((and (pair? tree) (eq? (first tree) 'if))
          (assert (= (length tree) 4) "If requires three arguments.")
          (list (list 'branch
@@ -45,11 +43,12 @@
                      (make-placeholder (parse-stmt (fourth tree) vars retexpr)))))
         ((and (pair? tree) (pair? (car tree)) (empty? (cdr tree)))
          (parse-stmt (car tree) vars retexpr))
+        ((and (pair? tree) (pair? (car tree)) (is-jumper (car tree)))
+         (let* ((goto-target (make-placeholder (parse-stmt (cdr tree) vars retexpr))))
+           (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval) (goto ,goto-target))))))
         ((and (pair? tree) (pair? (car tree)))
-         (let* ((goto-target (make-placeholder 'unset))
-                (n-retexpr (lambda (retval) '((drop ,retval) (goto ,goto-target)))))
-           (placeholder-set! goto-target (parse-stmt (cdr tree) vars retexpr))
-           (parse-stmt (car tree) vars n-retexpr)))
+         (append (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval))))
+                 (parse-stmt (cdr tree) vars retexpr)))
         (else
          (retexpr (parse-expr tree vars)))))
 
@@ -76,5 +75,3 @@
           (cons (map var-type args)
                 (cons rettype
                       (make-reader-graph (blockify '() (parse-stmt body args (lambda (retval) (list (list 'return retval)))))))))))
-
-;(parse sample)
