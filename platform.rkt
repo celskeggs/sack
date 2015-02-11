@@ -1,10 +1,8 @@
 #lang racket
 
 (provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
-         platform-apply platform-process platform-parse platform-process-block register? set-registers! platform-struct-instrs platform-struct-reg-remap-op
-         label-framing-code function-framing-code platform-struct-label-framing platform-struct-function-framing
-         ; TEMPORARY
-         instruction instruction-struct-name instruction-struct-returns instruction-struct-used-arguments instruction-struct-constraints instruction-struct-arguments)
+         platform-apply platform-process platform-parse platform-process-block register? set-registers! label-framing-code function-framing-code
+         platform-struct-pipeline platform-struct-registers)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -14,11 +12,14 @@
 (require "parser.rkt")
 (require "boxdag-to-ssa.rkt")
 (require "rule-generator.rkt")
+(require "register-constraints.rkt")
+(require "pipeline.rkt")
+(require "platform-structures.rkt")
+(require "register-allocation.rkt")
+(require "stringify.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules reg-remap-op label-framing function-framing) #:mutable #:inspector #f)
-(struct platform-struct
-  (name registers instrs rules reg-remap-op label-framing function-framing) #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing pipeline) #:mutable #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
@@ -26,7 +27,8 @@
                    (reverse (mutable-platform-struct-rules x))
                    (mutable-platform-struct-reg-remap-op x)
                    (mutable-platform-struct-label-framing x)
-                   (mutable-platform-struct-function-framing x)))
+                   (mutable-platform-struct-function-framing x)
+                   (mutable-platform-struct-pipeline x)))
 
 (define-syntax-rule (set-registers! regs)
   (set-mutable-platform-struct-registers! active-platform-ref regs))
@@ -74,11 +76,29 @@
         (for ([rule (instruction-struct-rules i-struct)]
               #:unless (is-trivial-rule rule))
           (add-platform-rule! active-platform-ref rule)))) ...))
+(define-syntax-rule (platform-pipeline-def code ...)
+  (set-mutable-platform-struct-pipeline! active-platform-ref
+                                         (pipe-def (mutable-platform-struct-pipeline active-platform-ref)
+                                                   code ...)))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void)))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])
+                                      ; default pipeline entries
+                                      (platform-pipeline-def (platform lisplike-source linear-source)
+                                                             (parse lisplike-source))
+                                      (platform-pipeline-def (platform linear-source source-header)
+                                                             (list (first linear-source) (second linear-source) (third linear-source)))
+                                      (platform-pipeline-def (platform linear-source ssa-assembly)
+                                                             (map-curry platform-process-block platform (cdddr linear-source)))
+                                      (platform-pipeline-def (platform ssa-assembly register-constraints)
+                                                             (register-constrain platform ssa-assembly))
+                                      (platform-pipeline-def (platform ssa-assembly register-assembly)
+                                                             (register-allocate platform (platform-struct-registers platform) ssa-assembly))
+                                      (platform-pipeline-def (platform register-assembly source-header textual-assembly)
+                                                             (stringify platform (car source-header) register-assembly 0))
+                                      ; end default pipeline
                                       entry ...)
                  (finalize-platform platform-def))))
 

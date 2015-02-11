@@ -32,6 +32,7 @@
 (define (parse-expr tree vars)
   (cond ((pair? tree) (parse-expr-noded (car tree) (cdr tree) vars))
         ((number? tree) `(const ,tree u4))
+        ((string? tree) `(const-string ,tree))
         ((assoc tree vars) (var-expr (assoc tree vars)))
         (else (error "Cannot parse expression" tree))))
 

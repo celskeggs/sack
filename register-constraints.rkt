@@ -1,8 +1,8 @@
 #lang racket
 
 (require "utilities.rkt")
-(require "platform.rkt")
 (require "rule-generator.rkt")
+(require "platform-structures.rkt")
 
 (provide register-constrain instructions-argify)
 
@@ -177,4 +177,4 @@
           (list block constraints))))
   (if is-single
       (constrain-loop code)
-      (map constrain-loop (cdddr code))))
+      (map constrain-loop code)))

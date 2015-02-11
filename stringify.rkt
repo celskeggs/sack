@@ -1,6 +1,6 @@
 #lang racket
 
-(require "platform.rkt")
+(require "platform-structures.rkt")
 (require "rule-generator.rkt")
 (require "utilities.rkt")
 

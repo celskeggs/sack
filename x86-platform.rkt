@@ -7,6 +7,7 @@
 (require "register-constraints.rkt")
 (require "register-allocation.rkt")
 (require "stringify.rkt")
+(require "pipeline.rkt")
 
 (platform x86
           (register-based x86/mov/d (eax ebx ecx edx esi edi))
@@ -165,6 +166,7 @@
            ))
 
 (define sample '(fib ((n u4)) u4
+                     ;(printf "Fib @ %d" n)
                      (if (< n 2)
                          1
                          (+ (fib (- n 1))
@@ -173,15 +175,15 @@
 
 (define math-sample '(math ((a u4) (b u4)) u4
                            (+ a b)))
-
 (displayln "=== INPUT ===")
 sample
 (displayln "=== OUTPUT ===")
-(define conv (platform-parse x86 sample))
-(provide conv)
-conv
-(register-constrain x86 conv)
-(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) conv) 0))
-
+(displayln (pipe-run-sched-single x86 (platform-struct-pipeline x86) sample 'lisplike-source 'textual-assembly))
+;(pipe-sched (platform-struct-pipeline x86) 'lisplike-source 'textual-assembly)
+;(define conv (platform-parse x86 sample))
+;(provide conv)
+;conv
+;(register-constrain x86 conv)
+;(displayln (stringify x86 'fib (register-allocate x86 '(eax ebx ecx edx esi edi) (cdddr conv)) 0))
 
 (provide x86)
