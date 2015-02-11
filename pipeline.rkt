@@ -49,7 +49,7 @@
                   (let ((last-transformer (get-outputting-transformer (pipeline-transformers pipeline) remain)))
                     (cons last-transformer (append* (map iter (pipeline-transformer-input-types last-transformer))))))))))
 
-(define (do-nothing) (void))
+(define (do-nothing . a) (void))
 
 (define (pipe-run platform known remaining #:reporter (reporter do-nothing))
   (if (empty? remaining)
@@ -65,6 +65,8 @@
           (pipe-run platform (cons (list wanted-type result) known) others #:reporter reporter)))))
 
 (define (pipe-run-sched platform pipeline input input-type output-type #:reporter (reporter do-nothing))
+  (reporter input-type (void))
+  (reporter input-type input)
   (pipe-run platform (list (list input-type input)) (pipe-sched pipeline input-type output-type) #:reporter reporter))
 
 (define (pipe-run-sched-single platform pipeline input input-type output-type)

@@ -1,13 +1,10 @@
 #lang racket
 
 (require "utilities.rkt")
-(require "boxdag.rkt")
 (require "platform.rkt")
 (require "platform-templates.rkt")
-(require "register-constraints.rkt")
-(require "register-allocation.rkt")
-(require "stringify.rkt")
-(require "pipeline.rkt")
+
+(provide x86)
 
 (platform x86
           (register-based x86/mov/d (eax ebx ecx edx esi edi))
@@ -164,16 +161,3 @@
             ("  jecxz .c" source target)
             (goto-if-not source target)]
            ))
-
-(define sample '(fib ((n u4)) u4
-                     ;(printf "Fib @ %d" n)
-                     (if (< n 2)
-                         1
-                         (+ (fib (- n 1))
-                            (fib (- n 2))))))
-
-
-(define math-sample '(math ((a u4) (b u4)) u4
-                           (+ a b)))
-
-(run-platform-pipeline x86 sample)
