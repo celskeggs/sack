@@ -36,6 +36,16 @@
            (arg (pop))) ; handle removing arguments
           (use-standard-reductions)
           (reduce-<=) (reduce->=) (reduce-branch-invert)
+          (strings-as-pointers) (pointers-as-numbers u4)
+          (export-processor-each (strings identifier string) ("section .rodata\n" "")
+                                 "global " (symbol->string identifier) "\n"
+                                 (symbol->string identifier) ": db "
+                                 (string-join (map ~a (suffix (bytes->list (string->bytes/utf-8 string)) 0)) ", ")
+                                 "\n")
+          (reduction-simple (call-raw (target symbol?))
+                            (call-raw-imported (boxdag/export imports target target)))
+          (export-processor-each (imports imported _) ("section .text\n" "")
+                                 "extern _" (symbol->string imported) "\n")
           (instructions
            [(x86/movfm/c (dest any?) (source const?))
             ("  mov " dest ", [" source "]")
@@ -68,7 +78,7 @@
            [(x86/call (target symbol?))
             ("  call _" target)
             (multiple
-             (set-reg eax (call-raw target))
+             (set-reg eax (call-raw-imported target))
              (set-reg ecx (generic/undefined))
              (set-reg edx (generic/undefined))
              )]

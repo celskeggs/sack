@@ -2,12 +2,13 @@
 
 (require "utilities.rkt")
 
-(provide strip-boxes strip-outer-boxes get-data-boxes get-boxed! make-boxed! add-element! make-boxdag get-boxdag-contents
-         get-boxdag-element-pair boxdag-struct-preserved set-boxdag-struct-preserved! get-data-map optimize-boxdag)
+(provide strip-boxes strip-outer-boxes get-data-boxes get-boxed! make-boxed! add-element! make-boxdag get-boxdag-contents get-boxdag-exports
+         get-boxdag-element-pair boxdag-struct-preserved set-boxdag-struct-preserved! boxdag-struct-exported set-boxdag-struct-exported! get-data-map optimize-boxdag)
 
 (struct boxdag-struct
-  (data-map   ; ((unboxed . recursively-boxed) (unboxed . recursively-boxed) ...)
-   preserved) ; ((uninterned-key-or-null . recursively-boxed-top-level) ...) list of side-effectful expressions. the null entry contains the value of the boxdag.
+  (data-map  ; ((unboxed . recursively-boxed) (unboxed . recursively-boxed) ...)
+   preserved ; ((uninterned-key-or-null . recursively-boxed-top-level) ...) list of side-effectful expressions. the null entry contains the value of the boxdag.
+   exported) ; ((type key value) ...)
   #:mutable)
 
 (define (get-data-map boxdag)
@@ -81,7 +82,7 @@
   (map (curry make-boxed! boxdag) exprs))
 ; Make a boxdag for expr.
 (define (make-boxdag expr)
-  (let ((boxdag (boxdag-struct empty empty)))
+  (let ((boxdag (boxdag-struct empty empty empty)))
     (set-boxdag-struct-preserved! boxdag (list (cons null (make-boxed! boxdag expr))))
     boxdag))
 ; Optimize the specified boxful tree. If can-strip is true, any outer boxes may be removed.
@@ -105,3 +106,14 @@
 ; Strip any top-level double boxes from the boxdag
 (define (optimize-boxdag boxdag)
   (set-boxdag-struct-data-map! boxdag (optimize (get-data-map boxdag) #f)))
+; Get a structured version of the exported data
+(define (get-boxdag-exports boxdag)
+  (let* ((all-elems (boxdag-struct-exported boxdag))
+         (types (unique (map car all-elems) #:cmp< symbol<?))
+         (type-enum (map (lambda (x) (cons (cdr x) (car x))) (enumerate types)))
+         (typemap (make-vector (length types) empty)))
+    (for/list ((elem all-elems))
+      (let* ((typeid (cdr (assoc (car elem) type-enum)))
+             (entry (cdr elem)))
+        (vector-set! typemap typeid (cons entry (vector-ref typemap typeid)))))
+    (zip types (vector->list typemap))))

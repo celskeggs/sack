@@ -87,6 +87,7 @@
 
 ; Note that full-ssaify will mangle the boxdag's contents.
 (define (full-ssaify reg-mover x)
+  (trace 'full-ssaify x)
   (assign-ssas (ssaify-multi reg-mover x)))
 
 ;(full-ssaify (get-boxdag-contents sample-duplicated-set))

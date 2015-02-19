@@ -1,8 +1,8 @@
 #lang racket
 
 (provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
-         platform-apply platform-process platform-parse platform-process-block register? set-registers! label-framing-code function-framing-code
-         platform-struct-pipeline platform-struct-registers run-platform-pipeline)
+         platform-apply platform-parse register? set-registers! label-framing-code function-framing-code
+         platform-struct-pipeline platform-struct-registers run-platform-pipeline export-processor-raw export-processor-each)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -19,7 +19,7 @@
 (require "stringify.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules reg-remap-op label-framing function-framing pipeline) #:mutable #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing export-processors pipeline) #:mutable #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
@@ -28,6 +28,7 @@
                    (mutable-platform-struct-reg-remap-op x)
                    (mutable-platform-struct-label-framing x)
                    (mutable-platform-struct-function-framing x)
+                   (mutable-platform-struct-export-processors x)
                    (mutable-platform-struct-pipeline x)))
 
 (define-syntax-rule (set-registers! regs)
@@ -45,8 +46,25 @@
                                                     (lambda (blockid) (list end ...)))))
 (define-syntax-rule (function-framing-code (name locals touched) (start ...) (end ...))
   (set-mutable-platform-struct-function-framing! active-platform-ref
-                                              (list (lambda (name locals touched) (list start ...))
-                                                    (lambda (name locals touched) (list end ...)))))
+                                                 (list (lambda (name locals touched) (list start ...))
+                                                       (lambda (name locals touched) (list end ...)))))
+(define-syntax-rule (export-processor-each (name key value) (head tail) code ...)
+  (set-mutable-platform-struct-export-processors! active-platform-ref
+                                                  (cons (list 'name
+                                                              (lambda (dataset)
+                                                                (string-append head
+                                                                               (string-append*
+                                                                                (for/list ((pair dataset))
+                                                                                  (let ((key (first pair)) (value (second pair)))
+                                                                                    (string-append code ...))))
+                                                                               tail)))
+                                                        (mutable-platform-struct-export-processors active-platform-ref))))
+(define-syntax-rule (export-processor-raw (name dataset) code ...)
+  (set-mutable-platform-struct-export-processors! active-platform-ref
+                                                  (cons (list 'name
+                                                              (lambda (dataset)
+                                                                code ...))
+                                                        (mutable-platform-struct-export-processors active-platform-ref))))
 
 (define-syntax-parameter active-platform-ref
   (lambda (stx)
@@ -81,7 +99,7 @@
                                          (pipe-def (mutable-platform-struct-pipeline active-platform-ref)
                                                    code ...)))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty empty-pipeline))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])
@@ -90,8 +108,12 @@
                                                              (parse lisplike-source))
                                       (platform-pipeline-def (platform linear-source source-header)
                                                              (list (first linear-source) (second linear-source) (third linear-source)))
-                                      (platform-pipeline-def (platform linear-source ssa-assembly)
-                                                             (map-curry platform-process-block platform (cdddr linear-source)))
+                                      (platform-pipeline-def (platform linear-source ssa-assembly-with-exports)
+                                                             (map-curry platform-process-block platform (first linear-source) (cdddr linear-source)))
+                                      (platform-pipeline-def (platform ssa-assembly-with-exports ssa-assembly)
+                                                             (map first ssa-assembly-with-exports))
+                                      (platform-pipeline-def (platform ssa-assembly-with-exports processed-exports)
+                                                             (map second ssa-assembly-with-exports))
                                       (platform-pipeline-def (platform ssa-assembly register-constraints)
                                                              (register-constrain platform ssa-assembly))
                                       (platform-pipeline-def (platform register-constraints register-unargified)
@@ -100,8 +122,9 @@
                                                              (instructions-argify platform (map car register-unargified)))
                                       (platform-pipeline-def (platform register-unargified registers-touched)
                                                              (register-allocation-used-registers (platform-struct-registers platform) register-unargified))
-                                      (platform-pipeline-def (platform register-assembly registers-touched source-header textual-assembly)
-                                                             (stringify platform (car source-header) register-assembly registers-touched 0))
+                                      (platform-pipeline-def (platform register-assembly registers-touched source-header processed-exports textual-assembly)
+                                                             (string-append (stringify platform (car source-header) register-assembly registers-touched 0) "\n"
+                                                                            (stringify-exports platform processed-exports)))
                                       ; end default pipeline
                                       entry ...)
                  (finalize-platform platform-def))))
@@ -112,22 +135,32 @@
          (args (second parsed))
          (rettype (third parsed))
          (body (cdddr parsed)))
-    (cons name (cons args (cons rettype (map (curry platform-process-block platform) body))))))
-(define (platform-process-block platform block)
-  (assert (= (length block) 1) "Can only process one statement per block. (TODO)")
-  (let ((boxdag-extracted (get-boxdag-contents (platform-process platform (car block)))))
+    (cons name (cons args (cons rettype (map (curry platform-process-block platform name) body))))))
+(define (platform-process-block platform name block)
+  (assert (>= (length block) 1) "Each block must have at least one statement.")
+  (let* ((block-without-drops (map (lambda (x) (if (eq? (car x) 'drop) (cadr x) x)) block))
+         (boxdag (platform-process platform name block-without-drops))
+         (boxdag-extracted (get-boxdag-contents boxdag))
+         (boxdag-exported (get-boxdag-exports boxdag)))
     ; Note that full-ssaify will mangle the boxdag's contents, but that's fine here.
-    (full-ssaify (platform-struct-reg-remap-op platform) boxdag-extracted)))
+    (list (full-ssaify (platform-struct-reg-remap-op platform) boxdag-extracted)
+          boxdag-exported)))
 (define pre-preservation-rules
   (list (boxdag-rule
          `((id . ,number?) (reg . ,symbol?) (base . ,any?) (ref . ,any?))
          '(boxdag/preserve-ref-prepared ref (generic/subresult id reg base))
          '(boxdag/preserve-ref-prepared-immediate ref (generic/subresult id reg (boxdag/preserve base))))))
 (define (platform-apply platform boxdag)
+  (trace 'apply (get-boxdag-contents boxdag))
   (apply-boxdag-rules-all (append pre-preservation-rules (platform-struct-rules platform)) boxdag #:avoid-preserve '(generic/subresult call-raw))
   boxdag)
-(define (platform-process platform input)
-  (platform-apply platform (make-boxdag input)))
+(define (platform-process platform name inputs)
+  (let-values (((most-inputs last-input) (split-at-right inputs 1)))
+    (platform-apply platform (make-boxdag
+                              (suffix (cons 'generic/middle-of
+                                            (cons (list 'boxdag/export 'provided name name)
+                                                  (map-curry list 'boxdag/preserve most-inputs)))
+                                      (list 'generic/middle (cons 'boxdag/preserve last-input)))))))
 (define (calc-fixup-arg arg cond)
   (if (eq? cond const?)
       (wrap-const arg) ; TODO: don't hard-code types

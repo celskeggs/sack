@@ -50,3 +50,12 @@
 (define-syntax-rule (reduce-branch-invert)
   (reduction-simple (branch (condition any?) (true number?) (false number?))
                     (generic/middle-of (boxdag/preserve (goto-if-not condition false)) (generic/middle (goto true)))))
+
+(provide strings-as-pointers pointers-as-numbers)
+(define-syntax-rule (strings-as-pointers)
+  (reduction-calc (const-string (str string?))
+                  (let ((ptr (gensym 'cstr)))
+                    `(const-pointer (boxdag/export strings ,ptr ,str)))))
+(define-syntax-rule (pointers-as-numbers type)
+  (reduction-calc (const-pointer (ptr any?))
+                  `(const ,(const-ref ptr) type)))

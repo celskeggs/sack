@@ -34,7 +34,6 @@
   (and (pair? tree) (eq? (car tree) 'if)))
 
 (define (parse-stmt tree vars retexpr)
-  (trace 'parse-stmt tree vars retexpr)
   (cond ((and (pair? tree) (eq? (first tree) 'if))
          (assert (= (length tree) 4) "If requires three arguments.")
          (list (list 'branch

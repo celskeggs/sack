@@ -8,7 +8,6 @@
                          (+ a b)))
 
 (define fib '(fib ((n u4)) u4
-                  ;(printf "Fib @ %d" n)
                   (if (< n 2)
                       1
                       (+ (fib (- n 1))
@@ -20,5 +19,8 @@
                               1
                               (+ (fib (- n 1))
                                  (fib (- n 2))))))
+
+(define hello-world '(hello () v
+                            (puts "HELLO WORLD!")))
 
 (run-platform-pipeline x86 tracing-fib)
