@@ -1,6 +1,6 @@
 #lang racket
 
-(provide register-based argument-behavior use-standard-reductions call-behavior-forward)
+(provide register-based argument-behavior use-standard-reductions call-behavior-forward call-behavior-backward)
 
 (require "common.rkt")
 (require "platform.rkt")
@@ -36,6 +36,21 @@
                                (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-add arg))) args)
                                `((generic/middle (boxdag/preserve (call-raw ,target))))
                                (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-remove arg))) args)))))))
+(define-syntax-rule (call-behavior-backward (argn pushexpr) (argn2 popexpr))
+  (begin
+    (reduction-simple (generic/call-argument-add (argn any?))
+                      pushexpr)
+    (reduction-simple (generic/call-argument-remove (argn2 any?))
+                      popexpr)
+    (reduction-raw (list (cons 'target symbol?) (cons 'args list?))
+                   '(call target . args)
+                   (lambda (vars)
+                     (let ((target (cdr (assoc 'target vars)))
+                           (args (cdr (assoc 'args vars))))
+                       (append '(generic/middle-of)
+                               (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-add arg))) (reverse args))
+                               `((generic/middle (boxdag/preserve (call-raw ,target))))
+                               (map (lambda (arg) (list 'boxdag/preserve (list 'generic/call-argument-remove arg))) (reverse args))))))))
 
 (provide reduce-<= reduce->= reduce-branch reduce-branch-invert)
 (define-syntax-rule (reduce-<=)

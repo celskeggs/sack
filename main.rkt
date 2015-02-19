@@ -14,11 +14,11 @@
                          (fib (- n 2))))))
 
 (define tracing-fib '(fib ((n u4)) u4
-                          (printf "Fib @ %d" n)
+                          (printf "Fib @ %d\n" n)
                           (if (< n 2)
                               1
-                              (+ (fib (- n 1))
-                                 (fib (- n 2))))))
+                              (+ (fib (- n 2))
+                                 (fib (- n 1))))))
 
 (define hello-world '(hello () v
                             (puts "HELLO WORLD!")))

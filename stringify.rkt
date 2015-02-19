@@ -5,7 +5,7 @@
 (require "utilities.rkt")
 (require "common.rkt")
 
-(provide stringify stringify-exports)
+(provide stringify)
 
 (define (get-instruction platform name)
   (let ((matches (filter (lambda (found) (eq? name (instruction-struct-name found))) (platform-struct-instrs platform))))
@@ -25,21 +25,32 @@
     (string-append* (map stringify-elem (format arguments)))))
 
 (define (stringify-block plat seq)
-  (append (list (string-append* (map stringify-elem
-                                     ((first (platform-struct-label-framing plat)) (car seq)))))
-          (map-curry stringify-line plat (cdr seq))
-          (list (string-append* (map stringify-elem
-                                     ((second (platform-struct-label-framing plat)) (car seq)))))))
+  (let* ((id (first seq))
+         (code (second seq))
+         (exports (third seq))
+         (exportf (lambda (name) (second (or (assoc name exports) (list empty empty))))))
+    (append (list (string-append* (map stringify-elem
+                                       ((first (platform-struct-label-framing plat)) id exportf))))
+            (map-curry stringify-line plat code)
+            (list (string-append* (map stringify-elem
+                                       ((second (platform-struct-label-framing plat)) id exportf)))))))
 
-(define (stringify plat name seqs touched locals)
-  (string-join
-   (append* (append
-             (list (list (string-append* (map stringify-elem
-                                              ((first (platform-struct-function-framing plat)) name locals touched)))))
-             (map-curry stringify-block plat (enumerate seqs))
-             (list (list (string-append* (map stringify-elem
-                                              ((second (platform-struct-function-framing plat)) name locals touched)))))))
-   "\n"))
+(define (stringify plat name seqs touched locals uncondensed-exported)
+  (let* ((exported (map-curry map condense-export-set uncondensed-exported))
+         (merged-exports (merge-export-sets exported empty))
+         (merged-exportf (lambda (name) (second (or (assoc name merged-exports) (list empty empty))))))
+    (string-join
+     (append* (append
+               (list (list (string-append* (map stringify-elem
+                                                ((first (platform-struct-function-framing plat)) name locals touched merged-exportf)))))
+               (map-curry stringify-block plat (map suffix (enumerate seqs #:combiner list) exported))
+               (list (list (string-append* (map stringify-elem
+                                                ((second (platform-struct-function-framing plat)) name locals touched merged-exportf)))))))
+     "\n")))
+
+(define (condense-export-set set)
+  (list (car set)
+        (unique #:cmp< (curry pair<? #:cmp< symbol<?) (cadr set))))
 
 (define (merge-two-export-sets set-a set-b)
   (let ((all-names (unique (map car (append set-a set-b)) #:cmp< symbol<?)))
@@ -58,17 +69,3 @@
   (or (cmp< (first a) (first b))
       (and (cmp= (first a) (first b))
            (cmp< (second a) (second b)))))
-
-(define (stringify-exports platform exports)
-  (define procs (platform-struct-export-processors platform))
-  (define (stringify-one-export name-and-dataset)
-    (assert (= (length name-and-dataset) 2) "Bad export section.")
-    (let* ((name (car name-and-dataset))
-           (dataset (second name-and-dataset))
-           (uniquified-dataset (unique dataset #:cmp< (curry pair<? #:cmp< symbol<?)))
-           (proc (second (assert (assoc name procs) (string-append "Expected a processor for export section: " (~a name))))))
-      (proc uniquified-dataset)))
-  (string-join
-   (map stringify-one-export (merge-export-sets exports empty))
-   "\n"))
-  

@@ -50,11 +50,11 @@
       empty-stream
       (s-a-s-i (stream-first stream-stream) (stream-rest stream-stream))))
 
-(define (enumerate x)
+(define (enumerate x #:combiner (combiner cons))
   (define (enumerate-i x i)
     (if (empty? x)
         empty
-        (cons (cons i (car x)) (enumerate-i (cdr x) (+ i 1)))))
+        (cons (combiner i (car x)) (enumerate-i (cdr x) (+ i 1)))))
   (enumerate-i x 0))
 
 (define (unique-i seq)

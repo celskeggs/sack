@@ -2,7 +2,7 @@
 
 (provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
          platform-apply platform-parse register? set-registers! label-framing-code function-framing-code
-         platform-struct-pipeline platform-struct-registers run-platform-pipeline export-processor-raw export-processor-each)
+         platform-struct-pipeline platform-struct-registers run-platform-pipeline)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -19,7 +19,7 @@
 (require "stringify.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules reg-remap-op label-framing function-framing export-processors pipeline) #:mutable #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing pipeline) #:mutable #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
@@ -28,7 +28,6 @@
                    (mutable-platform-struct-reg-remap-op x)
                    (mutable-platform-struct-label-framing x)
                    (mutable-platform-struct-function-framing x)
-                   (mutable-platform-struct-export-processors x)
                    (mutable-platform-struct-pipeline x)))
 
 (define-syntax-rule (set-registers! regs)
@@ -40,31 +39,14 @@
 (define (add-platform-instr! platform-ref instr)
   (set-mutable-platform-struct-instrs! platform-ref (cons instr (mutable-platform-struct-instrs platform-ref))))
 
-(define-syntax-rule (label-framing-code (blockid) (start ...) (end ...))
+(define-syntax-rule (label-framing-code (blockid exports) (start ...) (end ...))
   (set-mutable-platform-struct-label-framing! active-platform-ref
-                                              (list (lambda (blockid) (list start ...))
-                                                    (lambda (blockid) (list end ...)))))
-(define-syntax-rule (function-framing-code (name locals touched) (start ...) (end ...))
+                                              (list (lambda (blockid exports) (list start ...))
+                                                    (lambda (blockid exports) (list end ...)))))
+(define-syntax-rule (function-framing-code (name locals touched exports) (start ...) (end ...))
   (set-mutable-platform-struct-function-framing! active-platform-ref
-                                                 (list (lambda (name locals touched) (list start ...))
-                                                       (lambda (name locals touched) (list end ...)))))
-(define-syntax-rule (export-processor-each (name key value) (head tail) code ...)
-  (set-mutable-platform-struct-export-processors! active-platform-ref
-                                                  (cons (list 'name
-                                                              (lambda (dataset)
-                                                                (string-append head
-                                                                               (string-append*
-                                                                                (for/list ((pair dataset))
-                                                                                  (let ((key (first pair)) (value (second pair)))
-                                                                                    (string-append code ...))))
-                                                                               tail)))
-                                                        (mutable-platform-struct-export-processors active-platform-ref))))
-(define-syntax-rule (export-processor-raw (name dataset) code ...)
-  (set-mutable-platform-struct-export-processors! active-platform-ref
-                                                  (cons (list 'name
-                                                              (lambda (dataset)
-                                                                code ...))
-                                                        (mutable-platform-struct-export-processors active-platform-ref))))
+                                                 (list (lambda (name locals touched exports) (list start ...))
+                                                       (lambda (name locals touched exports) (list end ...)))))
 
 (define-syntax-parameter active-platform-ref
   (lambda (stx)
@@ -99,7 +81,7 @@
                                          (pipe-def (mutable-platform-struct-pipeline active-platform-ref)
                                                    code ...)))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty empty-pipeline))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])
@@ -123,8 +105,7 @@
                                       (platform-pipeline-def (platform register-unargified registers-touched)
                                                              (register-allocation-used-registers (platform-struct-registers platform) register-unargified))
                                       (platform-pipeline-def (platform register-assembly registers-touched source-header processed-exports textual-assembly)
-                                                             (string-append (stringify platform (car source-header) register-assembly registers-touched 0) "\n"
-                                                                            (stringify-exports platform processed-exports)))
+                                                             (stringify platform (car source-header) register-assembly registers-touched 0 processed-exports))
                                       ; end default pipeline
                                       entry ...)
                  (finalize-platform platform-def))))

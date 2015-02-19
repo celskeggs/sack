@@ -9,43 +9,50 @@
 (platform x86
           (register-based x86/mov/d (eax ebx ecx edx esi edi))
           (argument-behavior argid (get-memory (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4))))))
-          (label-framing-code (blockid)
+          (label-framing-code (blockid get-export)
                               (".c" blockid ":")
                               ())
-          (function-framing-code (name locals touched)
+          (function-framing-code (name locals touched get-export)
                                  ("section .text\n"
                                   "global _" name "\n"
+                                  (string-append*
+                                   (for/list ((import-name (map car (get-export 'imports)))
+                                              #:unless (eq? import-name name))
+                                     (string-append "extern _" (symbol->string import-name) "\n")))
                                   "_" name ":\n"
                                   "  push ebp\n"
                                   "  mov ebp, esp\n"
-                                  (string-append* (map-curry format "  push ~s\n"
-                                                             (filter-not (lambda (x)
-                                                                           (member x '(eax ecx edx)))
-                                                                         touched)))
+                                  (string-append*
+                                   (map-curry format "  push ~s\n"
+                                              (filter-not (lambda (x)
+                                                            (member x '(eax ecx edx)))
+                                                          touched)))
                                   "  sub esp, 4*" locals)
                                  (".ret:\n"
-                                  (string-append* (map-curry format "  pop ~s\n"
-                                                             (filter-not (lambda (x)
-                                                                           (member x '(eax ecx edx)))
-                                                                         (reverse touched))))
+                                  (string-append*
+                                   (map-curry format "  pop ~s\n"
+                                              (filter-not (lambda (x)
+                                                            (member x '(eax ecx edx)))
+                                                          (reverse touched))))
                                   "  mov esp, ebp\n"
                                   "  pop ebp\n"
-                                  "  ret"))
-          (call-behavior-forward ; first argument to last argument
+                                  "  ret\n"
+                                  "section .rodata\n"
+                                  (string-append*
+                                   (for/list ((ptr-and-string (get-export 'strings)))
+                                     (string-append
+                                      "global " (symbol->string (car ptr-and-string)) "\n"
+                                      (symbol->string (car ptr-and-string)) ": db "
+                                      (string-join (map ~a (suffix (bytes->list (string->bytes/utf-8 (second ptr-and-string))) 0)) ", ")
+                                      "\n")))))
+          (call-behavior-backward ; first argument to last argument
            (arg (push arg)) ; handle adding arguments
            (arg (pop))) ; handle removing arguments
           (use-standard-reductions)
           (reduce-<=) (reduce->=) (reduce-branch-invert)
           (strings-as-pointers) (pointers-as-numbers u4)
-          (export-processor-each (strings identifier string) ("section .rodata\n" "")
-                                 "global " (symbol->string identifier) "\n"
-                                 (symbol->string identifier) ": db "
-                                 (string-join (map ~a (suffix (bytes->list (string->bytes/utf-8 string)) 0)) ", ")
-                                 "\n")
           (reduction-simple (call-raw (target symbol?))
                             (call-raw-imported (boxdag/export imports target target)))
-          (export-processor-each (imports imported _) ("section .text\n" "")
-                                 "extern _" (symbol->string imported) "\n")
           (instructions
            [(x86/movfm/c (dest any?) (source const?))
             ("  mov " dest ", [" source "]")
