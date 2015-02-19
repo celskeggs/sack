@@ -132,7 +132,6 @@
          '(boxdag/preserve-ref-prepared ref (generic/subresult id reg base))
          '(boxdag/preserve-ref-prepared-immediate ref (generic/subresult id reg (boxdag/preserve base))))))
 (define (platform-apply platform boxdag)
-  (trace 'apply (get-boxdag-contents boxdag))
   (apply-boxdag-rules-all (append pre-preservation-rules (platform-struct-rules platform)) boxdag #:avoid-preserve '(generic/subresult call-raw))
   boxdag)
 (define (platform-process platform name inputs)

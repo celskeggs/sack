@@ -23,4 +23,12 @@
 (define hello-world '(hello () v
                             (puts "HELLO WORLD!")))
 
-(run-platform-pipeline x86 tracing-fib)
+(define tracing-main '(main () u4
+                            (def i u4)
+                            (set! i 0)
+                            (while (< i 10)
+                                   (printf "fib(%d) = %d\n" i (fib i))
+                                   (set! i (+ 1 i)))
+                            0))
+
+(run-platform-pipeline x86 tracing-main)
