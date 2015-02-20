@@ -45,6 +45,21 @@
 (define (is-jumper tree)
   (and (pair? tree) (member (car tree) '(if while))))
 
+(define (parse-stmt-list tree vars retexpr)
+  (cond ((and (pair? tree) (pair? (car tree)) (eq? (caar tree) 'def))
+         (assert (= (length (car tree)) 3) "def requires two arguments.")
+         (parse-stmt-list (cdr tree) (add-var (cadar tree) (caddar tree) vars) retexpr))
+        ((and (pair? tree) (pair? (car tree)) (empty? (cdr tree)))
+         (parse-stmt (car tree) vars retexpr))
+        ((and (pair? tree) (pair? (car tree)) (is-jumper (car tree)))
+         (let* ((goto-target (make-placeholder (parse-stmt-list (cdr tree) vars retexpr))))
+           (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval) (goto ,goto-target))))))
+        ((and (pair? tree) (pair? (car tree)))
+         (append (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval))))
+                 (parse-stmt-list (cdr tree) vars retexpr)))
+        ((and (pair? tree) (empty? (cdr tree)))
+         (parse-stmt (car tree) vars retexpr))))
+
 (define (parse-stmt tree vars retexpr)
   (cond ((and (pair? tree) (eq? (first tree) 'if))
          (assert (= (length tree) 4) "if requires three arguments.")
@@ -63,19 +78,8 @@
                                                      (if (and (= (length return-statement) 1) (= (length (car return-statement)) 2) (eq? (caar return-statement) 'goto))
                                                          (cadar return-statement) ; go directly instead of gotoing to a goto block
                                                          (make-placeholder return-statement))))))
-           (placeholder-set! body (parse-stmt (cddr tree) vars (lambda (retval) `((drop ,retval) (goto ,condition)))))
+           (placeholder-set! body (parse-stmt-list (cddr tree) vars (lambda (retval) `((drop ,retval) (goto ,condition)))))
            (list (list 'goto condition))))
-        ((and (pair? tree) (pair? (car tree)) (eq? (caar tree) 'def))
-         (assert (= (length (car tree)) 3) "def requires two arguments.")
-         (parse-stmt (cdr tree) (add-var (cadar tree) (caddar tree) vars) retexpr))
-        ((and (pair? tree) (pair? (car tree)) (empty? (cdr tree)))
-         (parse-stmt (car tree) vars retexpr))
-        ((and (pair? tree) (pair? (car tree)) (is-jumper (car tree)))
-         (let* ((goto-target (make-placeholder (parse-stmt (cdr tree) vars retexpr))))
-           (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval) (goto ,goto-target))))))
-        ((and (pair? tree) (pair? (car tree)))
-         (append (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval))))
-                 (parse-stmt (cdr tree) vars retexpr)))
         (else
          (retexpr (parse-expr tree vars)))))
 
@@ -105,4 +109,8 @@
     (cons name
           (cons (map var-type args)
                 (cons rettype
-                      (make-reader-graph (blockify '() (filter-useless (parse-stmt body args (lambda (retval) (list (list 'return retval))))))))))))
+                      (make-reader-graph
+                       (blockify '() (filter-useless
+                                      (append (list (list 'allocate-argument-space (length args)))
+                                              (parse-stmt-list body args
+                                                       (lambda (retval) (list (list 'return retval)))))))))))))

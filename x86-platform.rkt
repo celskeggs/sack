@@ -8,11 +8,18 @@
 
 (platform x86
           (register-based x86/mov/d (eax ebx ecx edx esi edi))
-          (argument-behavior argid (get-memory (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4))))))
+          (argument-behavior argid
+                             (get-memory  (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4)))))
+                             value
+                             (set-memory! (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4)))) value))
+          (localvar-behavior (varid argcount)
+                             (get-memory  (- (get-reg ebp) (* (const varid u4) (const 4 u4))))
+                             value
+                             (set-memory! (- (get-reg ebp) (* (const varid u4) (const 4 u4))) value))
           (label-framing-code (blockid get-export)
                               (".c" blockid ":")
                               ())
-          (function-framing-code (name locals touched get-export)
+          (function-framing-code (name touched get-export)
                                  ("section .text\n"
                                   "global _" name "\n"
                                   (string-append*
@@ -22,12 +29,12 @@
                                   "_" name ":\n"
                                   "  push ebp\n"
                                   "  mov ebp, esp\n"
+                                  "  sub esp, 4*" (get-num-used-locals get-export) "\n"
                                   (string-append*
                                    (map-curry format "  push ~s\n"
                                               (filter-not (lambda (x)
                                                             (member x '(eax ecx edx)))
-                                                          touched)))
-                                  "  sub esp, 4*" locals)
+                                                          touched))))
                                  (".ret:\n"
                                   (string-append*
                                    (map-curry format "  pop ~s\n"
@@ -65,6 +72,10 @@
            [(x86/movfm/d (dest any?) (source any?))
             ("  mov " dest ", [" source "]")
             (set-reg dest (get-memory (get-reg source)))]
+           
+           [(x86/movtm/dd (dest any?) (source any?))
+            ("  mov [" dest "], " source)
+            (set-memory! (get-reg dest) (get-reg source))]
            
            [(x86/add/dc (dest any?) (source const?))
             ("  add " dest ", " source)

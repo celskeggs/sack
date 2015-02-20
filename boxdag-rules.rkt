@@ -3,7 +3,7 @@
 (require "utilities.rkt")
 (require "boxdag.rkt")
 
-(provide boxdag-rule apply-boxdag-rules-all apply-boxdag-rule-once boxdag-rule-args boxdag-rule-find boxdag-rule-repl fixup-boxdag-preserves)
+(provide boxdag-rule apply-boxdag-rules-all boxdag-rule-args boxdag-rule-find fixup-boxdag-preserves)
 
 (struct boxdag-rule
   (args   ; ((argument-name . predicate) ...)
@@ -60,10 +60,10 @@
                      (merge-sorted-match-results head tail))))))))
   (match-rule-recur (boxdag-rule-find rule) expression))
 ; Replace the specified variables with their values in the expression. vars: ((varname . value) ...)
-(define (apply-replacements vars in)
+(define (apply-replacements vars cur-exports in)
   (assert (not (box? in)) "Cannot have boxes in replacements!")
-  (cond ((pair? in) (cons (apply-replacements vars (car in)) (apply-replacements vars (cdr in))))
-        ((procedure? in) (in vars))
+  (cond ((pair? in) (cons (apply-replacements vars cur-exports (car in)) (apply-replacements vars cur-exports (cdr in))))
+        ((procedure? in) (in vars cur-exports))
         (else (let ((found (assoc in vars)))
                 (if found
                     (cdr found)
@@ -72,17 +72,17 @@
 (define (get-sorted-var-names vars)
   (sort (map car vars) symbol<?))
 ; Generate the replacement for the rule for element.
-(define (replace-rule rule element)
+(define (replace-rule rule cur-exports element)
   (let ((vars (match-rule rule element)))
     (assert (equal? (get-sorted-var-names vars) (get-sorted-var-names (boxdag-rule-args rule))) "Failed to match all arguments in boxdag rule.")
-    (apply-replacements vars (boxdag-rule-repl rule))))
+    (apply-replacements vars cur-exports (boxdag-rule-repl rule))))
 ; Apply rule to the boxdag, just once.
-(define (apply-boxdag-rule-once rule boxdag)
+(define (apply-boxdag-rule-once rule cur-exports boxdag)
   (let ((applicable-to (findf
                              (curry match-rule rule)
                              (get-data-boxes boxdag))))
     (if applicable-to
-        (let ((calculated (get-boxed! boxdag (replace-rule rule applicable-to))))
+        (let ((calculated (get-boxed! boxdag (replace-rule rule cur-exports applicable-to))))
           (assert (not (equal? (strip-boxes calculated) (strip-boxes applicable-to))) "Expected replacer to modify the element!")
           (set-box! applicable-to calculated)
           (let ((lookup (get-boxdag-element-pair boxdag calculated)))
@@ -92,10 +92,10 @@
           #t)
         #f)))
 ; Apply the first applicable rule to the boxdag, just once.
-(define (apply-boxdag-rules-once rules boxdag)
+(define (apply-boxdag-rules-once rules cur-export boxdag)
   (and (not (empty? rules))
-       (or (apply-boxdag-rule-once (car rules) boxdag)
-           (apply-boxdag-rules-once (cdr rules) boxdag))))
+       (or (apply-boxdag-rule-once (car rules) cur-export boxdag)
+           (apply-boxdag-rules-once (cdr rules) cur-export boxdag))))
 (struct unready-preserve (value) #:mutable #:inspector #f)
 ; Split into a series of preserved expressions.
 (define (apply-individual-preservation boxdag entry #:avoid-preserve avoid-for)
@@ -174,7 +174,7 @@
   ;(trace 'cycle (get-boxdag-contents boxdag))
   (optimize-boxdag boxdag)
   (and (or (apply-preservation boxdag #:avoid-preserve avoid-for)
-           (apply-boxdag-rules-once rules boxdag)
+           (apply-boxdag-rules-once rules (get-boxdag-exports boxdag) boxdag)
            (apply-deferred-preservation boxdag)
            (fixup-boxdag-preserves boxdag))
        (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for)))

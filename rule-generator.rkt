@@ -47,6 +47,11 @@
        (set-box! constraints (cons (cons (second behavior) (second behavior)) (unbox constraints))))
      (set-box! returns (cons (second behavior) (unbox returns)))
      (convert-behavior-expr arguments constraints (third behavior)))
+    ('set-memory!
+     (assert (= (length behavior) 3) "set-memory! expects two arguments")
+     (list 'set-memory!
+           (convert-behavior-expr arguments constraints (second behavior))
+           (convert-behavior-expr arguments constraints (third behavior))))
     ('discard
      (assert (= (length behavior) 2) "discard expects one argument")
      (convert-behavior-expr arguments constraints (second behavior)))

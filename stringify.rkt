@@ -35,22 +35,22 @@
             (list (string-append* (map stringify-elem
                                        ((second (platform-struct-label-framing plat)) id exportf)))))))
 
-(define (stringify plat name seqs touched locals uncondensed-exported)
+(define (stringify plat name seqs touched uncondensed-exported)
   (let* ((exported (map-curry map condense-export-set uncondensed-exported))
          (merged-exports (merge-export-sets exported empty))
          (merged-exportf (lambda (name) (second (or (assoc name merged-exports) (list empty empty))))))
     (string-join
      (append* (append
                (list (list (string-append* (map stringify-elem
-                                                ((first (platform-struct-function-framing plat)) name locals touched merged-exportf)))))
+                                                ((first (platform-struct-function-framing plat)) name touched merged-exportf)))))
                (map-curry stringify-block plat (map suffix (enumerate seqs #:combiner list) exported))
                (list (list (string-append* (map stringify-elem
-                                                ((second (platform-struct-function-framing plat)) name locals touched merged-exportf)))))))
+                                                ((second (platform-struct-function-framing plat)) name touched merged-exportf)))))))
      "\n")))
 
 (define (condense-export-set set)
   (list (car set)
-        (unique #:cmp< (curry pair<? #:cmp< symbol<?) (cadr set))))
+        (unique #:cmp< (curry pair<? #:cmp< symbol-number<?) (cadr set))))
 
 (define (merge-two-export-sets set-a set-b)
   (let ((all-names (unique (map car (append set-a set-b)) #:cmp< symbol<?)))
@@ -64,6 +64,15 @@
 (define (merge-export-sets sets populated)
   (if (empty? sets) populated
       (merge-export-sets (cdr sets) (merge-two-export-sets (car sets) populated))))
+
+(define (symbol-number<? a b)
+  (if (symbol? a)
+      (if (symbol? b)
+          (symbol<? a b)
+          #f)
+      (if (symbol? b)
+          #t
+          (< a b))))
 
 (define (pair<? a b #:cmp< (cmp< <) #:cmp= (cmp= equal?))
   (or (cmp< (first a) (first b))

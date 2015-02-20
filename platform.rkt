@@ -1,7 +1,7 @@
 #lang racket
 
-(provide platform reduction-raw reduction-simple reduction-advanced reduction-calc const? any? instructions set-reg-remap-op!
-         platform-apply platform-parse register? set-registers! label-framing-code function-framing-code
+(provide platform reduction-raw reduction-simple reduction-simple-gen reduction-advanced reduction-calc const? any? instructions
+         set-reg-remap-op! platform-apply platform-parse register? set-registers! label-framing-code function-framing-code
          platform-struct-pipeline platform-struct-registers run-platform-pipeline)
 
 (require racket/stxparam)
@@ -43,10 +43,10 @@
   (set-mutable-platform-struct-label-framing! active-platform-ref
                                               (list (lambda (blockid exports) (list start ...))
                                                     (lambda (blockid exports) (list end ...)))))
-(define-syntax-rule (function-framing-code (name locals touched exports) (start ...) (end ...))
+(define-syntax-rule (function-framing-code (name touched exports) (start ...) (end ...))
   (set-mutable-platform-struct-function-framing! active-platform-ref
-                                                 (list (lambda (name locals touched exports) (list start ...))
-                                                       (lambda (name locals touched exports) (list end ...)))))
+                                                 (list (lambda (name touched exports) (list start ...))
+                                                       (lambda (name touched exports) (list end ...)))))
 
 (define-syntax-parameter active-platform-ref
   (lambda (stx)
@@ -105,7 +105,7 @@
                                       (platform-pipeline-def (platform register-unargified registers-touched)
                                                              (register-allocation-used-registers (platform-struct-registers platform) register-unargified))
                                       (platform-pipeline-def (platform register-assembly registers-touched source-header processed-exports textual-assembly)
-                                                             (stringify platform (car source-header) register-assembly registers-touched 0 processed-exports))
+                                                             (stringify platform (car source-header) register-assembly registers-touched processed-exports))
                                       ; end default pipeline
                                       entry ...)
                  (finalize-platform platform-def))))
@@ -159,15 +159,17 @@
   (add-platform-rule! active-platform-ref
                       (boxdag-rule (list (cons 'arg cond) ...) (calc-fixup-recurse (list (cons 'arg cond) ...) 'find) 'repl)))
 (define-syntax-rule (reduction-simple (name (arg cond) ...) repl)
+  (reduction-simple-gen (name (arg cond) ...) 'repl))
+(define-syntax-rule (reduction-simple-gen (name (arg cond) ...) repl)
   (add-platform-rule! active-platform-ref
                       (boxdag-rule (list (cons 'arg cond) ...)
                                    (list 'name (calc-fixup-arg 'arg cond) ...)
-                                   'repl)))
-(define-syntax-rule (reduction-calc (name (arg cond) ...) repl)
+                                   repl)))
+(define-syntax-rule (reduction-calc (name (arg cond) ...) (cur-exports) repl)
   (add-platform-rule! active-platform-ref
                       (boxdag-rule (list (cons 'arg cond) ...)
                                    (list 'name (calc-fixup-arg 'arg cond) ...)
-                                   (lambda (vars)
+                                   (lambda (vars cur-exports)
                                      (let ((arg (cdr (assoc 'arg vars))) ...)
                                        repl)))))
 

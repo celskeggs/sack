@@ -8,7 +8,7 @@
 
 (define (any? x)
   #t)
-(define (const? x)
+(define (const? x) ; this gets special handling in some cases
   (or (integer? x) (const-ref? x)))
 (define (wrap-const x)
   (list 'const x 'u4)) ; TODO: don't hard-code types

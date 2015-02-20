@@ -31,4 +31,8 @@
                                    (set! i (+ 1 i)))
                             0))
 
-(run-platform-pipeline x86 tracing-main)
+(run-platform-pipeline x86 fib)
+
+;(require "platform-templates.rkt")
+;(platform tiny-test (use-standard-reductions))
+;(run-platform-pipeline tiny-test '(test ((i u4)) u4 (- i 0)))
