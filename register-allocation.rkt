@@ -64,6 +64,7 @@
      targets forced total-conflicts preferences)))
 
 (define (register-allocate-real regs block)
+  (assert (not (void? regs)) "Cannot allocate registers without a set of registers!")
   (let* ((seq (first block))
          (code (cdr seq))
          (constraints (second block))

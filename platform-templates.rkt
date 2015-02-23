@@ -1,13 +1,33 @@
 #lang racket
 
-(provide register-based argument-behavior localvar-behavior get-num-used-locals use-standard-reductions call-behavior-forward call-behavior-backward)
+(provide stack-based register-based argument-behavior localvar-behavior get-num-used-locals use-standard-reductions call-behavior-stack call-behavior-forward call-behavior-backward)
 
 (require "common.rkt")
 (require "platform.rkt")
 (require "utilities.rkt")
+(require "register-constraints.rkt")
+(require "register-allocation.rkt")
+(require "stack-allocation.rkt")
 
+(define-syntax-rule (stack-based)
+  (begin
+    (platform-pipeline-def (platform ssa-assembly stack-processed)
+                           (stack-allocate platform ssa-assembly))
+    (platform-pipeline-def (platform stack-processed specified-assembly)
+                           (stack-make-assembly platform stack-processed))
+    (platform-pipeline-def (platform stack-processed registers-touched)
+                           (stack-deepest-stack stack-processed))
+    ))
 (define-syntax-rule (register-based remap-op (reg ...))
   (begin
+    (platform-pipeline-def (platform ssa-assembly register-constraints)
+                           (register-constrain platform ssa-assembly))
+    (platform-pipeline-def (platform register-constraints register-unargified)
+                           (register-allocate platform (platform-struct-registers platform) register-constraints))
+    (platform-pipeline-def (platform register-unargified specified-assembly)
+                           (instructions-argify platform (map car register-unargified)))
+    (platform-pipeline-def (platform register-unargified registers-touched)
+                           (register-allocation-used-registers (platform-struct-registers platform) register-unargified))
     (define registers '(reg ...))
     (set! register? (lambda (r) (and (member r registers) #t)))
     (set-reg-remap-op! 'remap-op)
@@ -56,6 +76,14 @@
     (reduction-advanced (x any?) (generic/middle-of (generic/middle x)) x)
     (reduction-advanced (x any?) (rest pair?) (generic/middle-of (generic/middle x) . rest) x)
     (reduction-advanced (x any?) (rest pair?) (generic/middle-of x . rest) (generic/middle-of . rest))))
+(define-syntax-rule (call-behavior-stack)
+  (begin
+    (reduction-raw (list (cons 'target symbol?) (cons 'args list?))
+                   '(call target . args)
+                   (lambda (vars cur-exports)
+                     (let ((target (cdr (assoc 'target vars)))
+                           (args (cdr (assoc 'args vars))))
+                       `(boxdag/preserve (call-raw ,target)))))))
 (define-syntax-rule (call-behavior-forward (argn pushexpr) (argn2 popexpr))
   (begin
     (reduction-simple (generic/call-argument-add (argn any?))

@@ -3,9 +3,10 @@
 (require "pipeline.rkt")
 (require "platform.rkt")
 (require "x86-platform.rkt")
+(require "tstk-platform.rkt")
 
 (define math-test '(math ((a u4) (b u4)) u4
-                         (+ a b)))
+                         (- a (+ 3 b))))
 
 (define fib '(fib ((n u4)) u4
                   (if (< n 2)
@@ -31,7 +32,8 @@
                                    (set! i (+ 1 i)))
                             0))
 
-(run-platform-pipeline x86 fib)
+;(run-platform-pipeline x86 math-test #:target 'specified-assembly)
+(run-platform-pipeline tstk math-test)
 
 ;(require "platform-templates.rkt")
 ;(platform tiny-test (use-standard-reductions))

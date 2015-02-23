@@ -53,8 +53,8 @@
                                       (string-join (map ~a (suffix (bytes->list (string->bytes/utf-8 (second ptr-and-string))) 0)) ", ")
                                       "\n")))))
           (call-behavior-backward ; first argument to last argument
-           (arg (push arg)) ; handle adding arguments
-           (arg (pop))) ; handle removing arguments
+           (arg (callstack/push arg)) ; handle adding arguments
+           (arg (callstack/pop))) ; handle removing arguments
           (use-standard-reductions)
           (reduce-<=) (reduce->=) (reduce-branch-invert)
           (strings-as-pointers) (pointers-as-numbers u4)
@@ -103,15 +103,15 @@
            
            [(x86/push/c (source const?))
             ("  push " source)
-            (discard (push source))]
+            (discard (callstack/push source))]
            
            [(x86/push/d (source any?))
             ("  push " source)
-            (discard (push (get-reg source)))]
+            (discard (callstack/push (get-reg source)))]
            
            [(x86/pop (dest any?))
             ("  pop " dest)
-            (set-reg dest (pop))]
+            (set-reg dest (callstack/pop))]
            
            [(x86/cmp/dc (a any?) (b const?))
             ("  cmp " a ", " b)

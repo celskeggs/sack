@@ -1,7 +1,5 @@
 #lang racket
 
-; Currently assuming register-based.
-
 (provide make-instruction
          instruction-struct-name instruction-struct-arguments
          instruction-struct-returns instruction-struct-used-arguments
@@ -35,11 +33,24 @@
                (set-box! constraints (cons (cons (second behavior) (second behavior)) (unbox constraints)))
                (second behavior)
                )))
+        ('pop
+         (assert (= (length behavior) 2) "pop expects one argument")
+         (assert (symbol? (second behavior)) "pop expects a symbol argument")
+         (let ((pop (assoc (second behavior) (unbox arguments))))
+           (assert pop "pop expects a reference argument")
+           (second behavior)))
         (else
          (cons (car behavior) (map (curry convert-behavior-expr arguments constraints) (cdr behavior)))))))
 
 (define (convert-behavior-line arguments returns constraints behavior)
   (case (car behavior)
+    ('push
+     (assert (= (length behavior) 2) "push expects one argument")
+     (set-box! returns (cons 'pushed (unbox returns)))
+     (convert-behavior-expr arguments constraints (second behavior)))
+    ('raw
+     (assert (symbol? (second behavior)) "raw expects one symbol")
+     (cons (second behavior) (map (curry convert-behavior-expr arguments constraints) (cddr behavior))))
     ('set-reg
      (assert (= (length behavior) 3) "set-reg expects two arguments")
      (unless (assoc (second behavior) (unbox arguments))
@@ -111,9 +122,3 @@
                         (reverse (unbox mut-rets)) (car behavior-out)
                         string-gen behavior (cdr behavior-out)
                         (unbox mut-constraints))))
-
-;(convert-behavior 'x86/cmp/dd '((a any?) (b any?))
-;                  '(multiple
-;                    (set-reg carry-flag (unsigned< (get-reg a) (get-reg b)))
-;                    (set-reg zero-flag (= (get-reg a) (get-reg b)))
-;                    (set-reg sign-flag-xor-overflow-flag (< (get-reg a) (get-reg b)))))
