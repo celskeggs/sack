@@ -127,7 +127,7 @@
           (begin
             (set! any #t)
             (trace 'add-for-single x)
-            (begin0 (cons (car x) (make-boxed! boxdag (list 'set-local! (list 'boxdag/export 'internal-varcounts next-local next-local) contents)))
+            (begin0 (cons (car x) (make-boxed `(drop (set-local! (boxdag/export internal-varcounts ,next-local ,next-local) ,contents))))
                     (set! to-replace-for (cons (list (car x) next-local) to-replace-for))
                     (set! next-local (+ 1 next-local))))
           x)))
@@ -141,7 +141,7 @@
   (define (replace-in x)
     (if any
         (cons (car x)
-              (make-boxed! boxdag (replace-iter (cdr x))))
+              (make-boxed (replace-iter (cdr x))))
         x))
   (set-boxdag-struct-preserved! boxdag (map replace-in (map add-for-single (boxdag-struct-preserved boxdag))))
   (when any

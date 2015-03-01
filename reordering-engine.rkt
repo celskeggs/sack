@@ -19,7 +19,7 @@
                     (cons (gensym) ; a fake ssa because a real one isn't needed
                           (if (void? sym)
                               (list temp/pop)
-                              (list temp/save! sym (list 'ssa x)))))))
+                              (list drop (list temp/save! sym (list 'ssa x))))))))
          (loader (lambda (x) (cons x
                                    (list temp/load (get-temp-loc x))))))
     (append (map saver from)

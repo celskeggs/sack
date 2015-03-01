@@ -49,16 +49,33 @@
            (if (equal? finding element)
                empty
                #f))
-        ; both find and element are pairs
-        (else 
-         (let ((head (match-rule-recur (car finding) (car element))))
-           (if (not head)
-               #f
-               (let ((tail (match-rule-recur (cdr finding) (cdr element))))
-                 (if (not (and head tail))
-                     #f
-                     (merge-sorted-match-results head tail))))))))
+          ; both find and element are pairs
+          (else 
+           (let ((head (match-rule-recur (car finding) (car element))))
+             (if (not head)
+                 #f
+                 (let ((tail (match-rule-recur (cdr finding) (cdr element))))
+                   (if (not (and head tail))
+                       #f
+                       (merge-sorted-match-results head tail))))))))
   (match-rule-recur (boxdag-rule-find rule) expression))
+; Find matching subtree
+(define (search-tree rule tree)
+  (cond ((pair? tree)
+         (or (search-tree rule (car tree))
+             (search-tree rule (cdr tree))))
+        ((box? tree)
+         (or (and (match-rule rule tree) tree)
+             (search-tree rule (unbox tree))))
+        (else #f)))
+; Find matching subtree of list of preserves
+(define (search-preserve-list rule tree)
+  (and (not (empty? tree))
+       (or (search-tree rule (car tree))
+           (search-preserve-list rule (cdr tree)))))
+; Find matching subtree of boxdag
+(define (search-boxdag rule boxdag)
+  (search-preserve-list rule (boxdag-struct-preserved boxdag)))
 ; Replace the specified variables with their values in the expression. vars: ((varname . value) ...)
 (define (apply-replacements vars cur-exports in)
   (assert (not (box? in)) "Cannot have boxes in replacements!")
@@ -77,30 +94,15 @@
     (assert (equal? (get-sorted-var-names vars) (get-sorted-var-names (boxdag-rule-args rule))) "Failed to match all arguments in boxdag rule.")
     (apply-replacements vars cur-exports (boxdag-rule-repl rule))))
 ; Apply rule to the boxdag, just once.
-(define last-arguments (void))
-(define last-state -1)
-(provide last-arguments last-state replace-rule match-rule apply-replacements)
+(provide replace-rule match-rule apply-replacements)
 (define (apply-boxdag-rule-once rule cur-exports boxdag)
-  (set! last-arguments (list rule cur-exports boxdag))
-  (set! last-state 0)
-  (let ((applicable-to (findf
-                             (curry match-rule rule)
-                             (get-data-boxes boxdag))))
-    (set! last-arguments (list rule cur-exports boxdag applicable-to))
-    (set! last-state 1)
+  (let ((applicable-to (search-boxdag rule boxdag)))
     ;(trace 'applicable-to applicable-to (get-data-boxes boxdag))
     (if applicable-to
-        (let ((calculated (get-boxed! boxdag (replace-rule rule cur-exports applicable-to))))
+        (let ((calculated (unbox (make-boxed (replace-rule rule cur-exports applicable-to)))))
           (trace 'APPLY-RULE rule)
-          (set! last-state 2)
           (assert (not (equal? (strip-boxes calculated) (strip-boxes applicable-to))) "Expected replacer to modify the element!")
           (set-box! applicable-to calculated)
-          (set! last-state 3)
-          (let ((lookup (get-boxdag-element-pair boxdag calculated)))
-            (set! last-state 4)
-            (if lookup
-                (set-box! applicable-to (cdr lookup))
-                (add-element! boxdag applicable-to)))
           #t)
         #f)))
 ; Apply the first applicable rule to the boxdag, just once.
@@ -131,7 +133,7 @@
                (list 'boxdag/preserve-ref (append-output (gensym 'preserve) (second x)))))
           ((and (pair? x) (eq? (car x) 'boxdag/preserve-ref-prepared-immediate))
            (begin0 (list 'boxdag/preserve-ref (unready-preserve-value (second x)))
-                   (set-unready-preserve-value! (second x) (make-boxed! boxdag (third x)))))
+                   (set-unready-preserve-value! (second x) (make-boxed (third x)))))
           ((and (pair? x) (eq? (car x) 'boxdag/export))
            (set-boxdag-struct-exported! boxdag (cons (cdr x) (boxdag-struct-exported boxdag)))
            (third x))
@@ -144,17 +146,16 @@
   (if (not (eventually-contains-preserve entry))
       (list entry)
       (begin
-        (append-output (car entry) (make-boxed! boxdag (recurse (cdr entry))))
+        (append-output (car entry) (make-boxed (recurse (cdr entry))))
         (reverse (unbox output)))))
 (define (apply-individual-deferred-preservation boxdag entry any-found)
   (cons (car entry)
-        (make-boxed!
-         boxdag
+        (make-boxed
          (let recurse ((x (cdr entry)))
            (cond ((and (pair? x) (eq? (car x) 'boxdag/preserve-ref-prepared))
                   (begin0 (list 'boxdag/preserve-ref (unready-preserve-value (second x)))
                           (set-box! any-found #t)
-                          (set-unready-preserve-value! (second x) (make-boxed! boxdag (third x)))))
+                          (set-unready-preserve-value! (second x) (make-boxed (third x)))))
                  ((pair? x)
                   (cons (recurse (car x)) (recurse (cdr x))))
                  ((box? x)
@@ -184,7 +185,6 @@
 ; Apply any applicable rules and external processors to the boxdag, as many times as possible.
 (define (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for #:hooks (hooks empty))
   (trace 'cycle (get-boxdag-contents boxdag))
-  (optimize-boxdag boxdag)
   (and (or (apply-preservation boxdag #:avoid-preserve avoid-for)
            (apply-boxdag-rules-once rules (get-boxdag-exports boxdag) boxdag)
            (apply-deferred-preservation boxdag)

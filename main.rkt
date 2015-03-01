@@ -45,7 +45,8 @@
                         (+ 0 (fib 0))))
 
 ;(run-platform-pipeline x86 tracing-main)
-(run-platform-pipeline tstk tmp-test #:target 'ssa-assembly-with-exports) ; <<--- ACTIVE
+(run-platform-pipeline tstk tracing-main) ; <<--- ACTIVE
+;(run-platform-pipeline x86 tracing-main)
 
 ;(require "platform-templates.rkt")
 ;(platform tiny-test (use-standard-reductions))

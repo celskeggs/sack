@@ -1,6 +1,6 @@
 #lang racket
 
-(provide stack-based register-based argument-behavior localvar-behavior get-num-used-locals use-standard-reductions call-behavior-stack call-behavior-forward call-behavior-backward)
+(provide stack-based register-based argument-behavior localvar-behavior get-num-used-locals use-standard-reductions call-behavior-stack call-behavior-forward call-behavior-backward get-num-used-arguments)
 
 (require "common.rkt")
 (require "platform.rkt")
@@ -31,6 +31,8 @@
                            (instructions-argify platform (map car register-unargified)))
     (platform-pipeline-def (platform register-unargified registers-touched)
                            (register-allocation-used-registers (platform-struct-registers platform) register-unargified))
+    (reduction-simple (drop (what any?))
+                            what)
     (define registers '(reg ...))
     (set! register? (lambda (r) (and (member r registers) #t)))
     (set-reg-remap-op! 'remap-op)
@@ -65,6 +67,8 @@
                                (replace-first 'varid '(boxdag/export varusages varid varid) 'getter #:failure-error "Expected an argument ref in localvar-behavior getter!"))
          (reduction-simple-gen (set-local-arg-based! (varid any?) (value any?) (varcount number?))
                                (replace-first 'varid '(boxdag/export varusages varid varid) 'setter #:failure-error "Expected an argument ref in localvar-behavior getter!"))))
+(define (get-num-used-arguments get-export)
+  (second (assoc 'count (get-export 'argument-counts))))
 (define (get-num-used-locals get-export)
   (let ((used (get-export 'varusages)))
     (+ 1 (apply max (cons -1 (map car used))))))

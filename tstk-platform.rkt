@@ -2,6 +2,7 @@
 
 (require "platform.rkt")
 (require "platform-templates.rkt")
+(require "utilities.rkt")
 
 (provide tstk)
 
@@ -19,63 +20,63 @@
           (localvar-behavior (varid argcount) (slot-get (+ (const varid u4) (const argcount u4)))
                              value (slot-set! (+ (const varid u4) (const argcount u4)) value))
           (label-framing-code (blockid get-export)
-                              (" LABEL " blockid)
-                              ())
+                              (" (LABEL L." blockid)
+                              (" )"))
           (function-framing-code (name touched get-export)
-                                 ("FUNCTION " name)
-                                 ("END FUNCTION"))
+                                 ("(FUNCTION " name " " (+ (get-num-used-arguments get-export) (get-num-used-locals get-export)))
+                                 (")"))
           (reduce-branch)
           (call-behavior-stack)
           (instructions
            [(tstk/slot? (id const?))
-            ("  slot? " id)
+            ("  (slot? " id ")")
             (push (slot-get id))
             #:options (no-deduplicate)]
            [(tstk/slot! (id const?) (source any?))
-            ("  slot! " id)
+            ("  (slot! " id ")")
             (discard (drop (slot-set! id (pop source))))]
            [(tstk/const (value const?))
-            ("  const " value)
+            ("  (const " value ")")
             (push value)
             #:options (no-deduplicate)]
            [(tstk/const-string (value string?))
-            ("  const-string \"" (escape-string value) "\"")
+            ("  (const-string \"" (escape-string value) "\")")
             (push (const-string value))
             #:options (no-deduplicate)]
            [(tstk/add (a any?) (b any?))
-            ("  add")
+            ("  (add)")
             (push (+ (pop a) (pop b)))]
            [(tstk/sub (a any?) (b any?))
-            ("  sub")
+            ("  (sub)")
             (push (- (pop a) (pop b)))]
            [(tstk/mul (a any?) (b any?))
-            ("  mul")
+            ("  (mul)")
             (push (* (pop a) (pop b)))]
            [(tstk/cmplt (a any?) (b any?))
-            ("  cmplt")
+            ("  (cmplt)")
             (push (< (pop a) (pop b)))]
            [(tstk/cmpgt (a any?) (b any?))
-            ("  cmpgt")
+            ("  (cmpgt)")
             (push (> (pop a) (pop b)))]
            [(tstk/cmple (a any?) (b any?))
-            ("  cmple")
+            ("  (cmple)")
             (push (<= (pop a) (pop b)))]
            [(tstk/cmpge (a any?) (b any?))
-            ("  cmpge")
+            ("  (cmpge)")
             (push (>= (pop a) (pop b)))]
            [(tstk/invoke (target symbol?) (args list?))
-            ("  invoke " target " " (length args))
+            ("  (invoke " target " " (length args) ")")
             (push (call-raw-n target . args))]
            [(tstk/jumpif (cond any?) (target number?))
-            ("  jumpif ." target)
+            ("  (jumpif L." target ")")
             (goto-if cond target)]
            [(tstk/jump (target number?))
-            ("  jump ." target)
+            ("  (jump L." target ")")
             (goto target)]
            [(tstk/ret (value any?))
-            ("  ret")
+            ("  (ret)")
             (return (pop value))]
            [(tstk/pop (x any?))
-            ("  pop")
+            ("  (pop)")
             (discard (drop (pop x)))]
           ))
