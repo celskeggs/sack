@@ -91,6 +91,7 @@
     ;(trace 'applicable-to applicable-to (get-data-boxes boxdag))
     (if applicable-to
         (let ((calculated (get-boxed! boxdag (replace-rule rule cur-exports applicable-to))))
+          (trace 'APPLY-RULE rule)
           (set! last-state 2)
           (assert (not (equal? (strip-boxes calculated) (strip-boxes applicable-to))) "Expected replacer to modify the element!")
           (set-box! applicable-to calculated)
@@ -103,8 +104,6 @@
           #t)
         #f)))
 ; Apply the first applicable rule to the boxdag, just once.
-; TEMPORARY
-   (provide apply-boxdag-rule-once)
 (define (apply-boxdag-rules-once rules cur-export boxdag)
   (and (not (empty? rules))
        (or (apply-boxdag-rule-once (car rules) cur-export boxdag)
@@ -179,15 +178,20 @@
     (unbox any-found)))
 ; Move backward any preserved expressions.
 (define (apply-preservation boxdag #:avoid-preserve avoid-for)
-  (let ((orig-length (length (boxdag-struct-preserved boxdag))))
+  (let ((orig-length (length (boxdag-struct-preserved boxdag))) (orig-export-length (length (boxdag-struct-exported boxdag))))
     (set-boxdag-struct-preserved! boxdag (append* (map (lambda (pres) (apply-individual-preservation boxdag pres #:avoid-preserve avoid-for)) (boxdag-struct-preserved boxdag))))
-    (not (= orig-length (length (boxdag-struct-preserved boxdag))))))
+    (not (and (= orig-length (length (boxdag-struct-preserved boxdag))) (= orig-export-length (length (boxdag-struct-exported boxdag)))))))
 ; Apply any applicable rules and external processors to the boxdag, as many times as possible.
-(define (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for)
-  ;(trace 'cycle (get-boxdag-contents boxdag))
+(define (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for #:hooks (hooks empty))
+  (trace 'cycle (get-boxdag-contents boxdag))
   (optimize-boxdag boxdag)
   (and (or (apply-preservation boxdag #:avoid-preserve avoid-for)
            (apply-boxdag-rules-once rules (get-boxdag-exports boxdag) boxdag)
            (apply-deferred-preservation boxdag)
-           (fixup-boxdag-preserves boxdag))
-       (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for)))
+           (fixup-boxdag-preserves boxdag)
+           (run-all-hooks hooks boxdag))
+       (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for #:hooks hooks)))
+(define (run-all-hooks hooks boxdag)
+  (if (empty? hooks) #f
+      (or ((car hooks) boxdag)
+          (run-all-hooks (cdr hooks) boxdag))))

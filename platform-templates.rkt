@@ -19,6 +19,7 @@
                            (stack-make-assembly platform stack-processed))
     (platform-pipeline-def (platform stack-processed registers-touched)
                            (stack-deepest-stack stack-processed))
+    (boxdag-hook stack-add-preserve-saving-and-loading)
     ))
 (define-syntax-rule (register-based remap-op (reg ...))
   (begin
@@ -69,7 +70,7 @@
     (+ 1 (apply max (cons -1 (map car used))))))
 (define (const-zero? x)
   (or (equal? x 0)
-      (and (pair? x) (eq? (car x) 'const) (= (cadr x) 0))))
+      (and (pair? x) (eq? (car x) 'const) (equal? (cadr x) 0))))
 (define-syntax-rule (use-standard-reductions)
   (begin
     (reduction-calc (+ (a const?) (b const?)) (_) (wrap-const (+ a b)))

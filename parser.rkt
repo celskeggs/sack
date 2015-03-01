@@ -2,7 +2,7 @@
 
 (require "utilities.rkt")
 
-(provide parse)
+(provide parse parse-varcount)
 
 (define (parse-arg args)
   (trace 'parse-arg args) ;(0 n u4)
@@ -113,3 +113,8 @@
                        (blockify '() (filter-useless
                                       (parse-stmt-list body args
                                                        (lambda (retval) (list (list 'return retval))))))))))))
+(define (parse-varcount tree)
+  (cond ((not (pair? tree)) 0)
+        ((member (car tree) '(set-local! local)) (+ 1 (second tree)))
+        (else (max (parse-varcount (car tree))
+                   (parse-varcount (cdr tree))))))

@@ -105,6 +105,7 @@
         (else entry)))
 ; Strip any top-level double boxes from the boxdag
 (define (optimize-boxdag boxdag)
+  JUST ABOUT TO MAKE THIS COMPLETELY WRECK THE BOXDAG AND ELIMINATE ALL CONVERGENCES
   (set-boxdag-struct-data-map! boxdag (optimize (get-data-map boxdag) #f)))
 ; Get a structured version of the exported data
 (define (get-boxdag-exports boxdag)

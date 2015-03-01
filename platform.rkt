@@ -2,7 +2,7 @@
 
 (provide platform reduction-raw reduction-simple reduction-simple-gen reduction-advanced reduction-calc const? any? instructions
          set-reg-remap-op! platform-apply platform-parse register? set-registers! label-framing-code function-framing-code
-         platform-struct-pipeline platform-struct-registers run-platform-pipeline platform-pipeline-def)
+         platform-struct-pipeline platform-struct-registers run-platform-pipeline platform-pipeline-def boxdag-hook)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -17,7 +17,7 @@
 (require "stringify.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules reg-remap-op label-framing function-framing pipeline) #:mutable #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing pipeline boxdag-hooks) #:mutable #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
@@ -26,7 +26,8 @@
                    (mutable-platform-struct-reg-remap-op x)
                    (mutable-platform-struct-label-framing x)
                    (mutable-platform-struct-function-framing x)
-                   (mutable-platform-struct-pipeline x)))
+                   (mutable-platform-struct-pipeline x)
+                   (mutable-platform-struct-boxdag-hooks x)))
 
 (define-syntax-rule (set-registers! regs)
   (set-mutable-platform-struct-registers! active-platform-ref regs))
@@ -36,6 +37,8 @@
   (set-mutable-platform-struct-rules! platform-ref (cons rule (mutable-platform-struct-rules platform-ref))))
 (define (add-platform-instr! platform-ref instr)
   (set-mutable-platform-struct-instrs! platform-ref (cons instr (mutable-platform-struct-instrs platform-ref))))
+(define (add-platform-boxdag-hook! platform-ref hook)
+  (set-mutable-platform-struct-boxdag-hooks! platform-ref (cons hook (mutable-platform-struct-boxdag-hooks platform-ref))))
 
 (define-syntax-rule (label-framing-code (blockid exports) (start ...) (end ...))
   (set-mutable-platform-struct-label-framing! active-platform-ref
@@ -76,6 +79,8 @@
   (and (symbol? (boxdag-rule-find rule))
        (= (length (boxdag-rule-args rule)) 1)
        (equal? (cdar (boxdag-rule-args rule)) any?)))
+(define-syntax-rule (boxdag-hook hook)
+  (add-platform-boxdag-hook! active-platform-ref hook))
 (define-syntax-rule (instructions instr ...)
   (begin
     (begin
@@ -89,7 +94,7 @@
                                          (pipe-def (mutable-platform-struct-pipeline active-platform-ref)
                                                    code ...)))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline empty))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])
@@ -101,7 +106,8 @@
                                       (platform-pipeline-def (platform linear-source ssa-assembly-with-exports)
                                                              (map (curry platform-process-block
                                                                          platform (first linear-source)
-                                                                         #:exported `((argument-counts count ,(length (second linear-source)))))
+                                                                         #:exported `((argument-counts count ,(length (second linear-source)))
+                                                                                      (internal-varcounts original ,(parse-varcount (cdddr linear-source)))))
                                                                   (cdddr linear-source)))
                                       (platform-pipeline-def (platform ssa-assembly-with-exports ssa-assembly)
                                                              (map first ssa-assembly-with-exports))
@@ -110,7 +116,7 @@
                                       (platform-pipeline-def (platform processed-exports condensed-exports)
                                                              (map-curry map condense-export-set processed-exports))
                                       (platform-pipeline-def (platform condensed-exports merged-exports)
-                                                             (merge-export-sets condensed-exports empty))
+                                                             (map condense-export-set (merge-export-sets condensed-exports empty)))
                                       (platform-pipeline-def (platform specified-assembly registers-touched source-header condensed-exports merged-exports textual-assembly)
                                                              (stringify platform (car source-header) specified-assembly registers-touched condensed-exports merged-exports))
                                       ; end default pipeline
@@ -140,7 +146,9 @@
          '(boxdag/preserve-ref-prepared ref (generic/subresult id reg base))
          '(boxdag/preserve-ref-prepared-immediate ref (generic/subresult id reg (boxdag/preserve base))))))
 (define (platform-apply platform boxdag)
-  (apply-boxdag-rules-all (append pre-preservation-rules (platform-struct-rules platform)) boxdag #:avoid-preserve '(generic/subresult call-raw))
+  (apply-boxdag-rules-all (append pre-preservation-rules (platform-struct-rules platform)) boxdag
+                          #:avoid-preserve '(generic/subresult call-raw)
+                          #:hooks (map (lambda (x) (curry x platform)) (platform-struct-boxdag-hooks platform)))
   boxdag)
 (define (platform-process platform name inputs #:exported (exported empty))
   (let-values (((most-inputs last-input) (split-at-right inputs 1)))

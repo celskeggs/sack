@@ -37,12 +37,15 @@
                             0))
 
 (define var-test '(test () u4
-                   (def i u4)
-                   (set! i 0)
-                   0))
+                        (def i u4)
+                        (set! i 0)
+                        0))
+
+(define tmp-test '(test () u4
+                        (+ 0 (fib 0))))
 
 ;(run-platform-pipeline x86 tracing-main)
-(run-platform-pipeline tstk tracing-main) ; <<--- ACTIVE
+(run-platform-pipeline tstk tmp-test #:target 'ssa-assembly-with-exports) ; <<--- ACTIVE
 
 ;(require "platform-templates.rkt")
 ;(platform tiny-test (use-standard-reductions))
