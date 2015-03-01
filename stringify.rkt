@@ -5,7 +5,7 @@
 (require "utilities.rkt")
 (require "common.rkt")
 
-(provide stringify)
+(provide stringify condense-export-set merge-export-sets)
 
 (define (get-instruction platform name)
   (let ((matches (filter (lambda (found) (eq? name (instruction-struct-name found))) (platform-struct-instrs platform))))
@@ -35,10 +35,8 @@
             (list (string-append* (map stringify-elem
                                        ((second (platform-struct-label-framing plat)) id exportf)))))))
 
-(define (stringify plat name seqs touched uncondensed-exported)
-  (let* ((exported (map-curry map condense-export-set uncondensed-exported))
-         (merged-exports (merge-export-sets exported empty))
-         (merged-exportf (lambda (name) (second (or (assoc name merged-exports) (list empty empty))))))
+(define (stringify plat name seqs touched exported merged-exports)
+  (let* ((merged-exportf (lambda (name) (second (or (assoc name merged-exports) (list empty empty))))))
     (string-join
      (append* (append
                (list (list (string-append* (map stringify-elem
@@ -48,7 +46,7 @@
                                                 ((second (platform-struct-function-framing plat)) name touched merged-exportf)))))))
      "\n")))
 
-(define (condense-export-set set)
+(define (condense-export-set set) ; should be moved somewhere else.
   (list (car set)
         (unique #:cmp< (curry pair<? #:cmp< symbol-number<?) (cadr set))))
 

@@ -3,11 +3,15 @@
 (require "utilities.rkt")
 (require "platform-structures.rkt")
 (require "rule-generator.rkt")
+(require "reordering-engine.rkt")
 
 (provide stack-allocate stack-make-assembly stack-deepest-stack)
 
-(define (stack-allocate platform ssa-assembly)
-  (map-curry calculate-stacks platform ssa-assembly))
+(define (get-num-used-locals used)
+  (+ 1 (apply max (cons -1 (map car used)))))
+(define (stack-allocate platform used setup ssa-assembly)
+  (let ((first-local (get-num-used-locals used)))
+    (map-curry calculate-stacks platform first-local setup ssa-assembly)))
 
 (define (get-instruction platform name)
   (let ((matches (filter (lambda (found) (eq? name (instruction-struct-name found))) (platform-struct-instrs platform))))
@@ -23,13 +27,25 @@
     (if (= counts 1)
         (list (list 'ssa ssa-id))
         empty)))
+(define (get-arguments platform line)
+  (let* ((ssa-id (first line))
+         (instruction-name (second line))
+         (instruction (get-instruction platform instruction-name))
+         (counts (instruction-struct-arguments instruction)))
+    (if (and (not (empty? counts)) (eq? (second (last counts)) list?))
+        (values (- (length counts) 1) #t)
+        (values (length counts) #f))))
+(define (is-vararg? platform line)
+  (member 'vararg (instruction-struct-options (get-instruction platform (second line)))))
 
 (define (get-ssa arg)
   (and (pair? arg) (eq? (first arg) 'ssa) arg))
 (define (get-nonssa arg)
   (and (not (and (pair? arg) (eq? (first arg) 'ssa))) arg))
+(define (unwrap-ssa arg)
+  (second (assert (get-ssa arg) "Expected a SSA:" arg)))
 
-(define (evaluate-stacks platform lines stack) ; stack is stored with top element first, unlike the rest of the system.
+(define (evaluate-stacks platform first-local setup lines stack) ; stack is stored with top element first, unlike the rest of the system.
   (if (empty? lines)
       (begin
         (assert (empty? stack) "Stack should be empty at the end!")
@@ -40,13 +56,30 @@
              (avail-arguments (reverse (take stack (length arguments))))
              (remain-stack (list-tail stack (length arguments)))
              (returns (get-returns platform line)))
-        (assert (equal? avail-arguments arguments) "Stack mismatch... TODO")
-        (cons (list (cons (second line) remain-args) 'STK remain-stack 'ARGS arguments)
-              (evaluate-stacks platform (cdr lines)
-                               (append (reverse returns) remain-stack))))))
+        (let-values (((minimum-arguments can-have-more-arguments) (get-arguments platform line)))
+          (if can-have-more-arguments
+              (assert (>= (length (cddr line)) minimum-arguments) "Too few instruction:" line)
+              (assert (= (length (cddr line)) minimum-arguments) "Incorrect number of arguments:" line))
+          (let* ((redone-arguments (if can-have-more-arguments
+                                       (suffix (take (cddr line) minimum-arguments) (drop (cddr line) minimum-arguments))
+                                       (cddr line))))
+            (trace 'stack stack)
+            (if (not (equal? avail-arguments arguments))
+                (let ((to-insert (calculate-reordering first-local (first setup) (second setup) (third setup) (map unwrap-ssa stack) (map unwrap-ssa (reverse arguments)))))
+                  (trace 'INSERT to-insert)
+                  (evaluate-stacks platform first-local setup (append to-insert lines) stack))
+                  ;(string-append "Stack mismatch... TODO: " (~a avail-arguments) " -- " (~a arguments)))
+                (let ((evaluated (evaluate-stacks platform first-local setup (cdr lines)
+                                                  (append (reverse returns) remain-stack))))
+                  (if (string? evaluated)
+                      evaluated
+                      (cons (list (cons (second line) redone-arguments) 'STK remain-stack 'ARGS arguments 'REDONE redone-arguments)
+                            evaluated)))))))))
   
-(define (calculate-stacks platform ssa-assembly)
-  (evaluate-stacks platform (cdr ssa-assembly) empty))
+(define (calculate-stacks platform first-local setup ssa-assembly)
+  (let* ((evaluated (evaluate-stacks platform first-local setup (cdr ssa-assembly) empty)))
+    (assert (not (string? evaluated)) evaluated)
+    evaluated))
 
 (define (stack-make-assembly-for-block platform sequence)
   (let* ((lines (map car sequence))

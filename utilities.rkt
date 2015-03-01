@@ -1,6 +1,6 @@
 #lang racket
 
-(provide zip unzip without assert tree->string trace find-index list->stream stream-append-stream enumerate suffix unique map-curry without-presorted and* map->list comment map-join)
+(provide zip unzip without assert tree->string trace define-traced find-index list->stream stream-append-stream enumerate suffix unique map-curry without-presorted and* map->list comment map-join map-and-tail not-wrap)
 
 (define (zip a b)
   (cond ((and (empty? a) (empty? b)) empty)
@@ -24,6 +24,10 @@
 (define (trace . args)
   (pretty-print args)
   (newline))
+(define-syntax-rule (define-traced (name args ...) code ...)
+  (define (name args ...)
+    (trace 'name args ...)
+    code ...))
 
 (define-syntax-rule (assert x failmsg ...)
   (if x
@@ -96,3 +100,10 @@
          (assert (equal? (cadar a) (second (assoc (caar a) b))) "map-join got conflicting values!")
          (map-join (cdr a) b))
         (else (cons (car a) (map-join (cdr a) b)))))
+
+(define (map-and-tail f lst)
+  (if (pair? lst) (cons (f (car lst)) (map-and-tail f (cdr lst)))
+      (f lst)))
+
+(define (not-wrap f)
+  (lambda args (not (apply f args))))

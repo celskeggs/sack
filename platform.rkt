@@ -52,16 +52,26 @@
 (define-syntax-parameter register?
   (lambda (stx)
     (raise-syntax-error #f "use of register? outside a platform declaration")))
-(define-syntax-rule (instruction (name (arg-name arg-type) ...)
-                                 (string-part ...)
-                                 instr-behavior)
-  (make-instruction 'name
-                    (list (list 'arg-name arg-type) ...)
-                    (lambda (mapping)
-                      (let ((arg-name (second (assoc 'arg-name mapping))) ...)
-                        (list string-part ...)))
-                    'instr-behavior
-                    empty))
+(define-syntax instruction
+  (syntax-rules ()
+    [(instruction (name (arg-name arg-type) ...) (string-part ...) instr-behavior)
+     (make-instruction 'name
+                       (list (list 'arg-name arg-type) ...)
+                       (lambda (mapping)
+                         (let ((arg-name (second (assoc 'arg-name mapping))) ...)
+                           (list string-part ...)))
+                       'instr-behavior
+                       empty
+                       empty)]
+    [(instruction (name (arg-name arg-type) ...) (string-part ...) instr-behavior #:options (option ...))
+     (make-instruction 'name
+                       (list (list 'arg-name arg-type) ...)
+                       (lambda (mapping)
+                         (let ((arg-name (second (assoc 'arg-name mapping))) ...)
+                           (list string-part ...)))
+                       'instr-behavior
+                       empty
+                       '(option ...))]))
 (define (is-trivial-rule rule) ; TODO: Use this to autoselect register movement operation.
   (and (symbol? (boxdag-rule-find rule))
        (= (length (boxdag-rule-args rule)) 1)
@@ -89,14 +99,20 @@
                                       (platform-pipeline-def (platform linear-source source-header)
                                                              (list (first linear-source) (second linear-source) (third linear-source)))
                                       (platform-pipeline-def (platform linear-source ssa-assembly-with-exports)
-                                                             (map-curry platform-process-block platform (first linear-source) (cdddr linear-source)))
+                                                             (map (curry platform-process-block
+                                                                         platform (first linear-source)
+                                                                         #:exported `((argument-counts count ,(length (second linear-source)))))
+                                                                  (cdddr linear-source)))
                                       (platform-pipeline-def (platform ssa-assembly-with-exports ssa-assembly)
                                                              (map first ssa-assembly-with-exports))
                                       (platform-pipeline-def (platform ssa-assembly-with-exports processed-exports)
                                                              (map second ssa-assembly-with-exports))
-
-                                      (platform-pipeline-def (platform specified-assembly registers-touched source-header processed-exports textual-assembly)
-                                                             (stringify platform (car source-header) specified-assembly registers-touched processed-exports))
+                                      (platform-pipeline-def (platform processed-exports condensed-exports)
+                                                             (map-curry map condense-export-set processed-exports))
+                                      (platform-pipeline-def (platform condensed-exports merged-exports)
+                                                             (merge-export-sets condensed-exports empty))
+                                      (platform-pipeline-def (platform specified-assembly registers-touched source-header condensed-exports merged-exports textual-assembly)
+                                                             (stringify platform (car source-header) specified-assembly registers-touched condensed-exports merged-exports))
                                       ; end default pipeline
                                       entry ...)
                  (finalize-platform platform-def))))
@@ -108,14 +124,15 @@
          (rettype (third parsed))
          (body (cdddr parsed)))
     (cons name (cons args (cons rettype (map (curry platform-process-block platform name) body))))))
-(define (platform-process-block platform name block)
+(define (platform-process-block platform name block #:exported (exported empty))
   (assert (>= (length block) 1) "Each block must have at least one statement.")
-  (let* ((block-without-drops (map (lambda (x) (if (eq? (car x) 'drop) (cadr x) x)) block))
-         (boxdag (platform-process platform name block-without-drops))
+  (let* (;(block-without-drops (map (lambda (x) (if (eq? (car x) 'drop) (cadr x) x)) block))
+         (boxdag (platform-process platform name block;-without-drops
+                                   #:exported exported))
          (boxdag-extracted (get-boxdag-contents boxdag))
          (boxdag-exported (get-boxdag-exports boxdag)))
     ; Note that full-ssaify will mangle the boxdag's contents, but that's fine here.
-    (list (full-ssaify (platform-struct-reg-remap-op platform) boxdag-extracted)
+    (list (full-ssaify platform boxdag-extracted)
           boxdag-exported)))
 (define pre-preservation-rules
   (list (boxdag-rule
@@ -125,13 +142,14 @@
 (define (platform-apply platform boxdag)
   (apply-boxdag-rules-all (append pre-preservation-rules (platform-struct-rules platform)) boxdag #:avoid-preserve '(generic/subresult call-raw))
   boxdag)
-(define (platform-process platform name inputs)
+(define (platform-process platform name inputs #:exported (exported empty))
   (let-values (((most-inputs last-input) (split-at-right inputs 1)))
     (platform-apply platform (make-boxdag
                               (suffix (cons 'generic/middle-of
                                             (cons (list 'boxdag/export 'provided name name)
                                                   (map-curry list 'boxdag/preserve most-inputs)))
-                                      (list 'generic/middle (cons 'boxdag/preserve last-input)))))))
+                                      (list 'generic/middle (cons 'boxdag/preserve last-input)))
+                              #:exported exported))))
 (define (calc-fixup-arg arg cond)
   (if (eq? cond const?)
       (wrap-const arg) ; TODO: don't hard-code types

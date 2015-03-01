@@ -3,7 +3,7 @@
 (require "utilities.rkt")
 (require "boxdag.rkt")
 
-(provide boxdag-rule apply-boxdag-rules-all boxdag-rule-args boxdag-rule-find fixup-boxdag-preserves)
+(provide boxdag-rule apply-boxdag-rules-all boxdag-rule-args boxdag-rule-find boxdag-rule-repl fixup-boxdag-preserves)
 
 (struct boxdag-rule
   (args   ; ((argument-name . predicate) ...)
@@ -77,21 +77,34 @@
     (assert (equal? (get-sorted-var-names vars) (get-sorted-var-names (boxdag-rule-args rule))) "Failed to match all arguments in boxdag rule.")
     (apply-replacements vars cur-exports (boxdag-rule-repl rule))))
 ; Apply rule to the boxdag, just once.
+(define last-arguments (void))
+(define last-state -1)
+(provide last-arguments last-state replace-rule match-rule apply-replacements)
 (define (apply-boxdag-rule-once rule cur-exports boxdag)
+  (set! last-arguments (list rule cur-exports boxdag))
+  (set! last-state 0)
   (let ((applicable-to (findf
                              (curry match-rule rule)
                              (get-data-boxes boxdag))))
+    (set! last-arguments (list rule cur-exports boxdag applicable-to))
+    (set! last-state 1)
+    ;(trace 'applicable-to applicable-to (get-data-boxes boxdag))
     (if applicable-to
         (let ((calculated (get-boxed! boxdag (replace-rule rule cur-exports applicable-to))))
+          (set! last-state 2)
           (assert (not (equal? (strip-boxes calculated) (strip-boxes applicable-to))) "Expected replacer to modify the element!")
           (set-box! applicable-to calculated)
+          (set! last-state 3)
           (let ((lookup (get-boxdag-element-pair boxdag calculated)))
+            (set! last-state 4)
             (if lookup
                 (set-box! applicable-to (cdr lookup))
                 (add-element! boxdag applicable-to)))
           #t)
         #f)))
 ; Apply the first applicable rule to the boxdag, just once.
+; TEMPORARY
+   (provide apply-boxdag-rule-once)
 (define (apply-boxdag-rules-once rules cur-export boxdag)
   (and (not (empty? rules))
        (or (apply-boxdag-rule-once (car rules) cur-export boxdag)

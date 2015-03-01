@@ -5,8 +5,14 @@
 
 (provide tstk)
 
+(define (escape-char c)
+  (if (char=? c #\newline) "\\n"
+      (string c)))
+(define (escape-string str)
+  (string-append* (map escape-char (string->list str))))
+
 (platform tstk
-          (stack-based)
+          (stack-based tstk/slot! tstk/slot? tstk/pop)
           (use-standard-reductions)
           (argument-behavior argid (slot-get (const argid u4))
                              value (slot-set! (const argid u4) value))
@@ -23,13 +29,19 @@
           (instructions
            [(tstk/slot? (id const?))
             ("  slot? " id)
-            (push (slot-get id))]
+            (push (slot-get id))
+            #:options (no-deduplicate)]
            [(tstk/slot! (id const?) (source any?))
             ("  slot! " id)
-            (raw slot-set! id (pop source))]
+            (discard (drop (slot-set! id (pop source))))]
            [(tstk/const (value const?))
             ("  const " value)
-            (push value)]
+            (push value)
+            #:options (no-deduplicate)]
+           [(tstk/const-string (value string?))
+            ("  const-string \"" (escape-string value) "\"")
+            (push (const-string value))
+            #:options (no-deduplicate)]
            [(tstk/add (a any?) (b any?))
             ("  add")
             (push (+ (pop a) (pop b)))]
@@ -51,9 +63,9 @@
            [(tstk/cmpge (a any?) (b any?))
             ("  cmpge")
             (push (>= (pop a) (pop b)))]
-           [(tstk/invoke (target symbol?))
-            ("  invoke " target)
-            (push (call-raw target))]
+           [(tstk/invoke (target symbol?) (args list?))
+            ("  invoke " target " " (length args))
+            (push (call-raw-n target . args))]
            [(tstk/jumpif (cond any?) (target number?))
             ("  jumpif ." target)
             (goto-if cond target)]
@@ -63,4 +75,7 @@
            [(tstk/ret (value any?))
             ("  ret")
             (return (pop value))]
+           [(tstk/pop (x any?))
+            ("  pop")
+            (discard (drop (pop x)))]
           ))

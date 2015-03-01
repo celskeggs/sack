@@ -8,6 +8,10 @@
 (define math-test '(math ((a u4) (b u4)) u4
                          (- a (+ 3 b))))
 
+(define minimal '(minimal ((n u4)) u4
+                          (+ (minimal (- n 1))
+                             (minimal (- n 2)))))
+
 (define fib '(fib ((n u4)) u4
                   (if (< n 2)
                       1
@@ -32,9 +36,27 @@
                                    (set! i (+ 1 i)))
                             0))
 
-;(run-platform-pipeline x86 math-test #:target 'specified-assembly)
-(run-platform-pipeline tstk math-test)
+(define var-test '(test () u4
+                   (def i u4)
+                   (set! i 0)
+                   0))
+
+;(run-platform-pipeline x86 tracing-main)
+(run-platform-pipeline tstk tracing-main) ; <<--- ACTIVE
 
 ;(require "platform-templates.rkt")
 ;(platform tiny-test (use-standard-reductions))
 ;(run-platform-pipeline tiny-test '(test ((i u4)) u4 (- i 0)))
+
+(require "boxdag-rules.rkt")
+(require "platform-structures.rkt")
+(require "boxdag.rkt")
+(require "utilities.rkt")
+
+(comment (let ((bd (make-boxdag '(+
+                                       (call minimal (- (slot-get (const 0 u4)) (const 1 u4)))
+                                       (call minimal (- (slot-get (const 0 u4)) (const 2 u4)))))))
+  (apply-boxdag-rule-once (list-ref (platform-struct-rules tstk) 14)
+                          (void)
+                          bd)
+  (get-boxdag-contents bd)))

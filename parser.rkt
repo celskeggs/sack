@@ -111,6 +111,5 @@
                 (cons rettype
                       (make-reader-graph
                        (blockify '() (filter-useless
-                                      (append (list (list 'allocate-argument-space (length args)))
-                                              (parse-stmt-list body args
-                                                       (lambda (retval) (list (list 'return retval)))))))))))))
+                                      (parse-stmt-list body args
+                                                       (lambda (retval) (list (list 'return retval))))))))))))

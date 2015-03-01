@@ -8,17 +8,22 @@
 
 ; Issue is a range (a b) where the endpoints invariably conflict in register allocation
 ; To fix this, we assign the former a new SSA in between a and b and copy into it.
+; But we also need to do the same at the end - and move it back, because otherwise it might not solve the conflict.
 (define (mitigate block issue remap-op)
   (define has-hit-instance #f) ; TODO: don't use mutable state
-  (define remap-target (+ 1 (car issue)))
+  (define remap-target (+ 1 (car issue))) ; move away here
+  (define remap-source (+ 1 (caar (filter (lambda (line) (member (list 'ssa (car issue)) (cdr line))) (cdr block))))) ; move back here
+  (define two-replaces (not (= (+ 1 remap-target) remap-source)))
+  (assert (< remap-target remap-source) "Bad ordering of accesses!")
   (define (remap-id ssa-id)
-    (if (<= ssa-id (car issue)) ssa-id (+ 1 ssa-id)))
+    (if (<= ssa-id (car issue)) ssa-id
+        (if (or (< ssa-id (- remap-source 1)) (not two-replaces)) (+ 1 ssa-id) (+ 2 ssa-id))))
   (define (remap-arg line-ssa arg)
     (cond ((and (pair? arg) (eq? (car arg) 'ssa))
            (if (and line-ssa (not has-hit-instance) (= (cadr arg) (car issue)))
                (begin
                  (set! has-hit-instance #t)
-                 (cons 'ssa (cons remap-target (cddr arg))))
+                 (cons 'ssa (cons (if two-replaces remap-source remap-target) (cddr arg))))
                (cons 'ssa (cons (remap-id (cadr arg)) (cddr arg)))))
           ((and (pair? arg) (eq? (car arg) 'generic/subresult))
            (map (curry remap-arg line-ssa) arg))
@@ -30,8 +35,13 @@
         (cons (car block) (insert-ssa (cdr block) entry))
         (cons entry block)))
   (cons (remap-arg #f (car block))
-        (insert-ssa (map remap-line (cdr block))
-                    (list remap-target remap-op (list 'ssa (car issue))))))
+        (let* ((to-insert (list remap-target remap-op (list 'ssa (car issue))))
+               (inserted (insert-ssa (map remap-line (cdr block)) to-insert)))
+          (if two-replaces
+              (insert-ssa
+               inserted
+               (list remap-source remap-op (list 'ssa remap-target)))
+              inserted))))
 
 (define (instructions-argify platform code)
   (define (get-instruction name)
@@ -161,9 +171,11 @@
   (define (tuplify-interferences block conf)
     (append* (map-curry tuplify-pair block conf)))
   (define (constrain-once block)
-    (list (expand-forces (ssa-forces block))
-          (tuplify-interferences block (ssa-interferences block))
-          (ssa-preferences block)))
+    (let* ((forces-initial (ssa-forces block))
+           (forces-expanded (expand-forces forces-initial)))
+      (list (expand-forces (ssa-forces block))
+            (tuplify-interferences block (ssa-interferences block))
+            (ssa-preferences block))))
   (define (constrain-issues constraints)
     (let ((forces (first constraints))
           (interferences (second constraints)))

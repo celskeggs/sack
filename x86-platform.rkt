@@ -7,7 +7,7 @@
 (provide x86)
 
 (platform x86
-          (register-based x86/mov/d (eax ebx ecx edx esi edi))
+          (register-based x86/mov/d (eax ecx edx ebx esi edi))
           (argument-behavior argid
                              (get-memory  (+ (get-reg ebp) (+ (const 8 u4) (* (const argid u4) (const 4 u4)))))
                              value

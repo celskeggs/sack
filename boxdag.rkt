@@ -71,7 +71,7 @@
              (make-boxed! boxdag (unbox expr)) ; strip all layers but one
              expr))
         ((pair? expr)
-         (let* ((subboxed (make-all-boxed! boxdag expr))
+         (let* ((subboxed (reverse (make-all-boxed! boxdag (reverse expr))))
                 (found (get-boxdag-element-pair boxdag subboxed)))
            (if found
                (cdr found)
@@ -81,8 +81,8 @@
 (define (make-all-boxed! boxdag exprs)
   (map (curry make-boxed! boxdag) exprs))
 ; Make a boxdag for expr.
-(define (make-boxdag expr)
-  (let ((boxdag (boxdag-struct empty empty empty)))
+(define (make-boxdag expr #:exported (exported empty))
+  (let ((boxdag (boxdag-struct empty empty exported)))
     (set-boxdag-struct-preserved! boxdag (list (cons null (make-boxed! boxdag expr))))
     boxdag))
 ; Optimize the specified boxful tree. If can-strip is true, any outer boxes may be removed.
