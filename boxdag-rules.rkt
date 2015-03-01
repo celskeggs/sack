@@ -100,7 +100,7 @@
     ;(trace 'applicable-to applicable-to (get-data-boxes boxdag))
     (if applicable-to
         (let ((calculated (unbox (make-boxed (replace-rule rule cur-exports applicable-to)))))
-          (trace 'APPLY-RULE rule)
+          ;(trace 'APPLY-RULE rule)
           (assert (not (equal? (strip-boxes calculated) (strip-boxes applicable-to))) "Expected replacer to modify the element!")
           (set-box! applicable-to calculated)
           #t)
@@ -184,7 +184,7 @@
     (not (and (= orig-length (length (boxdag-struct-preserved boxdag))) (= orig-export-length (length (boxdag-struct-exported boxdag)))))))
 ; Apply any applicable rules and external processors to the boxdag, as many times as possible.
 (define (apply-boxdag-rules-all rules boxdag #:avoid-preserve avoid-for #:hooks (hooks empty))
-  (trace 'cycle (get-boxdag-contents boxdag))
+  ;(trace 'cycle (get-boxdag-contents boxdag))
   (and (or (apply-preservation boxdag #:avoid-preserve avoid-for)
            (apply-boxdag-rules-once rules (get-boxdag-exports boxdag) boxdag)
            (apply-deferred-preservation boxdag)

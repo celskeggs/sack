@@ -30,19 +30,16 @@
           (instructions
            [(tstk/slot? (id const?))
             ("  (slot? " id ")")
-            (push (slot-get id))
-            #:options (no-deduplicate)]
+            (push (slot-get id))]
            [(tstk/slot! (id const?) (source any?))
             ("  (slot! " id ")")
             (discard (drop (slot-set! id (pop source))))]
            [(tstk/const (value const?))
             ("  (const " value ")")
-            (push value)
-            #:options (no-deduplicate)]
+            (push value)]
            [(tstk/const-string (value string?))
             ("  (const-string \"" (escape-string value) "\")")
-            (push (const-string value))
-            #:options (no-deduplicate)]
+            (push (const-string value))]
            [(tstk/add (a any?) (b any?))
             ("  (add)")
             (push (+ (pop a) (pop b)))]

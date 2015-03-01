@@ -104,5 +104,5 @@
 
 ; Note that full-ssaify will mangle the boxdag's contents.
 (define (full-ssaify platform x)
-  (trace 'full-ssaify x)
+  ;(trace 'full-ssaify x)
   (assign-ssas (ssaify-multi platform (platform-struct-reg-remap-op platform) x)))

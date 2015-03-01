@@ -68,15 +68,15 @@
                                        (cddr line))))
             ;(trace 'stack stack)
             (if (not (equal? avail-arguments arguments))
-                (let ((to-insert (calculate-reordering first-local (first setup) (second setup) (third setup) (map unwrap-ssa stack) (map unwrap-ssa (reverse arguments)))))
-                  ;(trace 'INSERT to-insert)
-                  (evaluate-stacks platform first-local setup (append to-insert lines) stack))
-                  ;(string-append "Stack mismatch... TODO: " (~a avail-arguments) " -- " (~a arguments)))
+                ;(let ((to-insert (calculate-reordering first-local (first setup) (second setup) (third setup) (map unwrap-ssa stack) (map unwrap-ssa (reverse arguments)))))
+                ;  (trace 'INSERT to-insert)
+                ;  (evaluate-stacks platform first-local setup (append to-insert lines) stack)))
+                (string-append "Stack mismatch... TODO: " (~a avail-arguments) " -- " (~a arguments))
                 (let ((evaluated (evaluate-stacks platform first-local setup (cdr lines)
                                                   (append (reverse returns) remain-stack))))
                   (if (string? evaluated)
                       evaluated
-                      (cons (list (cons (second line) redone-arguments) 'STK remain-stack 'ARGS arguments 'REDONE redone-arguments)
+                      (cons (list (cons (second line) redone-arguments) 'STK remain-stack 'ARGS arguments); 'REDONE redone-arguments)
                             evaluated)))))))))
   
 (define (calculate-stacks platform first-local setup ssa-assembly)
@@ -126,7 +126,7 @@
       (if (and (pair? contents) (symbol? (car contents)) (value-returning-instruction? (car contents)))
           (begin
             (set! any #t)
-            (trace 'add-for-single x)
+            ;(trace 'add-for-single x)
             (begin0 (cons (car x) (make-boxed `(drop (set-local! (boxdag/export internal-varcounts ,next-local ,next-local) ,contents))))
                     (set! to-replace-for (cons (list (car x) next-local) to-replace-for))
                     (set! next-local (+ 1 next-local))))
@@ -144,6 +144,6 @@
               (make-boxed (replace-iter (cdr x))))
         x))
   (set-boxdag-struct-preserved! boxdag (map replace-in (map add-for-single (boxdag-struct-preserved boxdag))))
-  (when any
-    (trace 'BECOMES (boxdag-struct-preserved boxdag)))
+  ;(when any
+  ;  (trace 'BECOMES (boxdag-struct-preserved boxdag)))
   any)
