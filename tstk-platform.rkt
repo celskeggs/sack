@@ -13,7 +13,7 @@
   (string-append* (map escape-char (string->list str))))
 
 (platform tstk
-          (stack-based tstk/slot! tstk/slot? tstk/pop)
+          (stack-based)
           (use-standard-reductions)
           (argument-behavior argid (slot-get (const argid u4))
                              value (slot-set! (const argid u4) value))

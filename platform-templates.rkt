@@ -9,12 +9,12 @@
 (require "register-allocation.rkt")
 (require "stack-allocation.rkt")
 
-(define-syntax-rule (stack-based save load pop)
+(define-syntax-rule (stack-based)
   (begin
     (platform-pipeline-def (platform ssa-assembly merged-exports stack-processed)
                            (let ((uses (second (or (assoc 'varusages merged-exports)
                                                    (list empty empty)))))
-                             (stack-allocate platform uses '(save load pop) ssa-assembly)))
+                             (stack-allocate platform uses ssa-assembly)))
     (platform-pipeline-def (platform stack-processed specified-assembly)
                            (stack-make-assembly platform stack-processed))
     (platform-pipeline-def (platform stack-processed registers-touched)

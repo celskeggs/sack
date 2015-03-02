@@ -8,9 +8,9 @@
 
 (define (get-num-used-locals used)
   (+ 1 (apply max (cons -1 (map car used)))))
-(define (stack-allocate platform used setup ssa-assembly)
+(define (stack-allocate platform used ssa-assembly)
   (let ((first-local (get-num-used-locals used)))
-    (map-curry calculate-stacks platform first-local setup ssa-assembly)))
+    (map-curry calculate-stacks platform first-local ssa-assembly)))
 
 (define (get-instruction platform name #:require (required #t))
   (let ((matches (filter (lambda (found) (eq? name (instruction-struct-name found))) (platform-struct-instrs platform))))
@@ -47,7 +47,7 @@
 (define (unwrap-ssa arg)
   (second (assert (get-ssa arg) "Expected a SSA:" arg)))
 
-(define (evaluate-stacks platform first-local setup lines stack) ; stack is stored with top element first, unlike the rest of the system.
+(define (evaluate-stacks platform first-local lines stack) ; stack is stored with top element first, unlike the rest of the system.
   (if (empty? lines)
       (begin
         (assert (empty? stack) "Stack should be empty at the end!")
@@ -71,15 +71,15 @@
                 ;  (trace 'INSERT to-insert)
                 ;  (evaluate-stacks platform first-local setup (append to-insert lines) stack)))
                 (string-append "Stack mismatch... TODO: " (~a avail-arguments) " -- " (~a arguments))
-                (let ((evaluated (evaluate-stacks platform first-local setup (cdr lines)
+                (let ((evaluated (evaluate-stacks platform first-local (cdr lines)
                                                   (append (reverse returns) remain-stack))))
                   (if (string? evaluated)
                       evaluated
                       (cons (list (cons (second line) redone-arguments) 'STK remain-stack 'ARGS arguments); 'REDONE redone-arguments)
                             evaluated)))))))))
   
-(define (calculate-stacks platform first-local setup ssa-assembly)
-  (let* ((evaluated (evaluate-stacks platform first-local setup (cdr ssa-assembly) empty)))
+(define (calculate-stacks platform first-local ssa-assembly)
+  (let* ((evaluated (evaluate-stacks platform first-local (cdr ssa-assembly) empty)))
     (assert (not (string? evaluated)) evaluated)
     evaluated))
 
