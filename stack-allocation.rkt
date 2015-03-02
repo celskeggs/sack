@@ -3,7 +3,6 @@
 (require "utilities.rkt")
 (require "platform-structures.rkt")
 (require "rule-generator.rkt")
-(require "reordering-engine.rkt")
 
 (provide stack-allocate stack-make-assembly stack-deepest-stack)
 
