@@ -4,6 +4,7 @@
 (require "platform.rkt")
 (require "x86-platform.rkt")
 (require "tstk-platform.rkt")
+(require "jvm-platform.rkt")
 
 (define math-test '(math ((a u4) (b u4)) u4
                          (- a (+ 3 b))))
@@ -35,6 +36,13 @@
                                    (printf "fib(%d) = %d\n" i (fib i))
                                    (set! i (+ 1 i)))
                             0))
+(define tracing-main-for-jvm '(main () u4
+                                    (def i u4)
+                                    (set! i 0)
+                                    (while (< i 10)
+                                           (jvm/extcall "printf(Ljava/lang/String;II)I" "fib(%d) = %d\n" i (fib i))
+                                           (set! i (+ 1 i)))
+                                    0))
 
 (define var-test '(test () u4
                         (def i u4)
@@ -45,8 +53,14 @@
                         (+ 0 (fib 0))))
 
 ;(run-platform-pipeline x86 tracing-main)
-(run-platform-pipeline tstk tracing-main) ; <<--- ACTIVE
-;(run-platform-pipeline x86 tracing-main)
+;(run-platform-pipeline tstk tracing-main)
+(define (jvm-compile code)
+  (run-platform-pipeline jvm code #:provide-result 'textual-assembly))
+(let ((gotten (map jvm-compile (list tracing-main-for-jvm fib))))
+  (displayln "=== LINKED ===")
+  (display (jvm-link "com/colbyskeggs/sack/Test"
+                     gotten
+                     #:include-main #t)))
 
 ;(require "platform-templates.rkt")
 ;(platform tiny-test (use-standard-reductions))

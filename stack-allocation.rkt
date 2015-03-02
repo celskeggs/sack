@@ -75,7 +75,7 @@
                                                   (append (reverse returns) remain-stack))))
                   (if (string? evaluated)
                       evaluated
-                      (cons (list (cons (second line) redone-arguments) 'STK remain-stack 'ARGS arguments); 'REDONE redone-arguments)
+                      (cons (list (cons (second line) redone-arguments) 'STK stack 'ARGS arguments); 'REDONE redone-arguments)
                             evaluated)))))))))
   
 (define (calculate-stacks platform first-local ssa-assembly)

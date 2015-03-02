@@ -2,7 +2,7 @@
 
 (provide platform reduction-raw reduction-simple reduction-simple-gen reduction-advanced reduction-calc const? any? instructions
          set-reg-remap-op! platform-apply platform-parse register? set-registers! label-framing-code function-framing-code
-         platform-struct-pipeline platform-struct-registers run-platform-pipeline platform-pipeline-def boxdag-hook)
+         platform-struct-pipeline platform-struct-registers run-platform-pipeline platform-pipeline-def boxdag-hook parser-simple-nodes)
 
 (require racket/stxparam)
 (require "utilities.rkt")
@@ -17,7 +17,7 @@
 (require "stringify.rkt")
 
 (struct mutable-platform-struct
-  (name registers instrs rules reg-remap-op label-framing function-framing pipeline boxdag-hooks) #:mutable #:inspector #f)
+  (name registers instrs rules reg-remap-op label-framing function-framing pipeline boxdag-hooks simple-nodes) #:mutable #:inspector #f)
 (define (finalize-platform x)
   (platform-struct (mutable-platform-struct-name x)
                    (mutable-platform-struct-registers x)
@@ -27,7 +27,8 @@
                    (mutable-platform-struct-label-framing x)
                    (mutable-platform-struct-function-framing x)
                    (mutable-platform-struct-pipeline x)
-                   (mutable-platform-struct-boxdag-hooks x)))
+                   (mutable-platform-struct-boxdag-hooks x)
+                   (mutable-platform-struct-simple-nodes x)))
 
 (define-syntax-rule (set-registers! regs)
   (set-mutable-platform-struct-registers! active-platform-ref regs))
@@ -81,6 +82,8 @@
        (equal? (cdar (boxdag-rule-args rule)) any?)))
 (define-syntax-rule (boxdag-hook hook)
   (add-platform-boxdag-hook! active-platform-ref hook))
+(define-syntax-rule (parser-simple-nodes nodes)
+  (set-mutable-platform-struct-simple-nodes! active-platform-ref nodes))
 (define-syntax-rule (instructions instr ...)
   (begin
     (begin
@@ -94,13 +97,13 @@
                                          (pipe-def (mutable-platform-struct-pipeline active-platform-ref)
                                                    code ...)))
 (define-syntax-rule (platform name entry ...)
-  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline empty))
+  (define name (let ((platform-def (mutable-platform-struct 'name (void) empty empty (void) (void) (void) empty-pipeline empty default-simple-nodes))
                      (is-register? (lambda (x) (error "No (register-based) declaration!"))))
                  (syntax-parameterize ([active-platform-ref (make-rename-transformer #'platform-def)]
                                        [register? (make-rename-transformer #'is-register?)])
                                       ; default pipeline entries
                                       (platform-pipeline-def (platform lisplike-source linear-source)
-                                                             (parse lisplike-source))
+                                                             (parse lisplike-source #:simple-nodes (platform-struct-simple-nodes platform)))
                                       (platform-pipeline-def (platform linear-source source-header)
                                                              (list (first linear-source) (second linear-source) (third linear-source)))
                                       (platform-pipeline-def (platform linear-source ssa-assembly-with-exports)
@@ -124,7 +127,7 @@
                  (finalize-platform platform-def))))
 
 (define (platform-parse platform input)
-  (let* ((parsed (parse input))
+  (let* ((parsed (parse input #:simple-nodes (platform-struct-simple-nodes platform)))
          (name (first parsed))
          (args (second parsed))
          (rettype (third parsed))
@@ -190,12 +193,17 @@
                                      (let ((arg (cdr (assoc 'arg vars))) ...)
                                        repl)))))
 
-(define (run-platform-pipeline platform code #:source (source 'lisplike-source) #:target (target 'textual-assembly))
+(define (run-platform-pipeline platform code #:source (source 'lisplike-source) #:target (target 'textual-assembly) #:provide-result (provide-result #f))
   (define (reporter data-type data)
     (if (void? data)
         (displayln (string-append "=== " (~a data-type) " ==="))
         (if (string? data)
             (displayln data)
             (pretty-print data))))
-  (pipe-run-sched platform (platform-struct-pipeline platform) code source target #:reporter reporter)
-  (void))
+  (let ((result
+         (pipe-run-sched platform (platform-struct-pipeline platform)
+                         code source target #:reporter reporter)))
+    (when provide-result
+      (if (eq? provide-result #t)
+          result
+          (second (assoc provide-result result))))))

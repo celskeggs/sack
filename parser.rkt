@@ -2,7 +2,7 @@
 
 (require "utilities.rkt")
 
-(provide parse parse-varcount)
+(provide parse parse-varcount default-simple-nodes)
 
 (define (parse-arg args)
   (trace 'parse-arg args) ;(0 n u4)
@@ -22,21 +22,21 @@
                                                            args)))))
         args))
 
-(define simple-nodes '(<= >= < > == != + - * / %))
+(define default-simple-nodes '(<= >= < > == != + - * / %))
 
-(define (parse-expr-noded type args vars)
+(define (parse-expr-noded type args vars #:simple-nodes simple-nodes)
   (cond ((member type simple-nodes)
-         (cons type (map (lambda (expr) (parse-expr expr vars)) args)))
+         (cons type (map (lambda (expr) (parse-expr expr vars #:simple-nodes simple-nodes)) args)))
         ((eq? type 'set!)
          (assert (= (length args) 2) "set! requires two arguments.")
          (let ((lookup (assoc (first args) vars)))
            (assert lookup (string-append "set! cannot find variable: " (symbol->string (first args))))
-           (list (string->symbol (string-append "set-" (symbol->string (caddr lookup)) "!")) (cadddr lookup) (parse-expr (second args) vars))))
+           (list (string->symbol (string-append "set-" (symbol->string (caddr lookup)) "!")) (cadddr lookup) (parse-expr (second args) vars #:simple-nodes simple-nodes))))
         (else
-         (cons 'call (cons type (map (lambda (expr) (parse-expr expr vars)) args))))))
+         (cons 'call (cons type (map (lambda (expr) (parse-expr expr vars #:simple-nodes simple-nodes)) args))))))
 
-(define (parse-expr tree vars)
-  (cond ((pair? tree) (parse-expr-noded (car tree) (cdr tree) vars))
+(define (parse-expr tree vars #:simple-nodes simple-nodes)
+  (cond ((pair? tree) (parse-expr-noded (car tree) (cdr tree) vars #:simple-nodes simple-nodes))
         ((number? tree) `(const ,tree u4))
         ((string? tree) `(const-string ,tree))
         ((symbol? tree) (if (assoc tree vars) (var-expr (assoc tree vars)) (error "No such variable:" tree)))
@@ -45,43 +45,43 @@
 (define (is-jumper tree)
   (and (pair? tree) (member (car tree) '(if while))))
 
-(define (parse-stmt-list tree vars retexpr)
+(define (parse-stmt-list tree vars retexpr #:simple-nodes simple-nodes)
   (cond ((and (pair? tree) (pair? (car tree)) (eq? (caar tree) 'def))
          (assert (= (length (car tree)) 3) "def requires two arguments.")
-         (parse-stmt-list (cdr tree) (add-var (cadar tree) (caddar tree) vars) retexpr))
+         (parse-stmt-list (cdr tree) (add-var (cadar tree) (caddar tree) vars) retexpr #:simple-nodes simple-nodes))
         ((and (pair? tree) (pair? (car tree)) (empty? (cdr tree)))
-         (parse-stmt (car tree) vars retexpr))
+         (parse-stmt (car tree) vars retexpr #:simple-nodes simple-nodes))
         ((and (pair? tree) (pair? (car tree)) (is-jumper (car tree)))
-         (let* ((goto-target (make-placeholder (parse-stmt-list (cdr tree) vars retexpr))))
-           (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval) (goto ,goto-target))))))
+         (let* ((goto-target (make-placeholder (parse-stmt-list (cdr tree) vars retexpr #:simple-nodes simple-nodes))))
+           (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval) (goto ,goto-target))) #:simple-nodes simple-nodes)))
         ((and (pair? tree) (pair? (car tree)))
-         (append (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval))))
-                 (parse-stmt-list (cdr tree) vars retexpr)))
+         (append (parse-stmt (car tree) vars (lambda (retval) `((drop ,retval))) #:simple-nodes simple-nodes)
+                 (parse-stmt-list (cdr tree) vars retexpr #:simple-nodes simple-nodes)))
         ((and (pair? tree) (empty? (cdr tree)))
-         (parse-stmt (car tree) vars retexpr))))
+         (parse-stmt (car tree) vars retexpr #:simple-nodes simple-nodes))))
 
-(define (parse-stmt tree vars retexpr)
+(define (parse-stmt tree vars retexpr #:simple-nodes simple-nodes)
   (cond ((and (pair? tree) (eq? (first tree) 'if))
          (assert (= (length tree) 4) "if requires three arguments.")
          (list (list 'branch
-                     (parse-expr (second tree) vars)
-                     (make-placeholder (parse-stmt (third tree) vars retexpr))
-                     (make-placeholder (parse-stmt (fourth tree) vars retexpr)))))
+                     (parse-expr (second tree) vars #:simple-nodes simple-nodes)
+                     (make-placeholder (parse-stmt (third tree) vars retexpr #:simple-nodes simple-nodes))
+                     (make-placeholder (parse-stmt (fourth tree) vars retexpr #:simple-nodes simple-nodes)))))
         ((and (pair? tree) (eq? (first tree) 'while))
          (assert (>= (length tree) 1) "while requires at least one argument.")
          (let ((condition (make-placeholder (void)))
                (body (make-placeholder (void))))
            (placeholder-set! condition (list (list 'branch
-                                                   (parse-expr (second tree) vars)
+                                                   (parse-expr (second tree) vars #:simple-nodes simple-nodes)
                                                    body
                                                    (let ((return-statement (filter-useless (retexpr '(parser/undefined)))))
                                                      (if (and (= (length return-statement) 1) (= (length (car return-statement)) 2) (eq? (caar return-statement) 'goto))
                                                          (cadar return-statement) ; go directly instead of gotoing to a goto block
                                                          (make-placeholder return-statement))))))
-           (placeholder-set! body (parse-stmt-list (cddr tree) vars (lambda (retval) `((drop ,retval) (goto ,condition)))))
+           (placeholder-set! body (parse-stmt-list (cddr tree) vars (lambda (retval) `((drop ,retval) (goto ,condition))) #:simple-nodes simple-nodes))
            (list (list 'goto condition))))
         (else
-         (retexpr (parse-expr tree vars)))))
+         (retexpr (parse-expr tree vars #:simple-nodes simple-nodes)))))
 
 (define (filter-useless statements)
   (if (number? statements) statements
@@ -104,7 +104,7 @@
 (define (blockify output-sequence tree)
   (blockify-traverse (suffix output-sequence tree) tree))
 
-(define (parse tree)
+(define (parse tree #:simple-nodes (simple-nodes default-simple-nodes))
   (let ((name (car tree)) (args (map parse-arg (enumerate (cadr tree)))) (rettype (caddr tree)) (body (cdddr tree)))
     (cons name
           (cons (map var-type args)
@@ -112,7 +112,8 @@
                       (make-reader-graph
                        (blockify '() (filter-useless
                                       (parse-stmt-list body args
-                                                       (lambda (retval) (list (list 'return retval))))))))))))
+                                                       (lambda (retval) (list (list 'return retval)))
+                                                       #:simple-nodes simple-nodes)))))))))
 (define (parse-varcount tree)
   (cond ((not (pair? tree)) 0)
         ((member (car tree) '(set-local! local)) (+ 1 (second tree)))

@@ -1,6 +1,6 @@
 #lang racket
 
-(provide stack-based register-based argument-behavior localvar-behavior get-num-used-locals use-standard-reductions call-behavior-stack call-behavior-forward call-behavior-backward get-num-used-arguments)
+(provide stack-based register-based argument-behavior localvar-behavior get-num-used-locals use-standard-reductions call-behavior-stack call-behavior-stack-adv call-behavior-forward call-behavior-backward get-num-used-arguments)
 
 (require "common.rkt")
 (require "platform.rkt")
@@ -86,13 +86,15 @@
     (reduction-advanced (x any?) (rest pair?) (generic/middle-of (generic/middle x) . rest) x)
     (reduction-advanced (x any?) (rest pair?) (generic/middle-of x . rest) (generic/middle-of . rest))))
 (define-syntax-rule (call-behavior-stack)
+  (call-behavior-stack-adv #:from call #:to call-raw-n #:target-type symbol?))
+(define-syntax-rule (call-behavior-stack-adv #:from from #:to to #:target-type target-type)
   (begin
-    (reduction-raw (list (cons 'target symbol?) (cons 'args list?))
-                   '(call target . args)
+    (reduction-raw (list (cons 'target target-type) (cons 'args list?))
+                   '(from target . args)
                    (lambda (vars cur-exports)
                      (let ((target (cdr (assoc 'target vars)))
                            (args (cdr (assoc 'args vars))))
-                       `(boxdag/preserve (call-raw-n ,target . ,args)))))))
+                       `(boxdag/preserve (to ,target . ,args)))))))
 (define-syntax-rule (call-behavior-forward (argn pushexpr) (argn2 popexpr))
   (begin
     (reduction-simple (generic/call-argument-add (argn any?))
