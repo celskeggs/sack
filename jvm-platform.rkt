@@ -83,6 +83,7 @@
           (parser-simple-nodes '(<= >= < > == != + - * / jvm/extcall))
           (reduce-branch)
           (call-behavior-stack)
+          (booleans-as-0-1)
           ; based on call-behavior-stack
           (reduction-raw (list (cons 'target string?) (cons 'args list?))
                    '(jvm/extcall (const-string target) . args)
@@ -90,10 +91,6 @@
                      (let ((target (cdr (assoc 'target vars)))
                            (args (cdr (assoc 'args vars))))
                        `(boxdag/preserve (jvm/extcall-n ,target . ,args)))))
-          ; we need a special way to do JVM invocations that aren't within our code
-          ;(reduction-raw (list (cons 'target string?) (cons 'rest list?))
-          ;               '(jvm/extcall (const-string target) . rest)
-          ;               '(jvm/invokestatic/local target . rest))
           (instructions
            [(jvm/ireturn (value any?))
             ("  ireturn")
@@ -116,18 +113,24 @@
            [(jvm/ldc/string (value string?))
             ("  ldc \"" (escape-string value) "\"")
             (push (const-string value))]
+           [(jvm/if_icmpeq (target number?) (a any?) (b any?))
+            ("  if_icmpeq L" target)
+            (goto-if (== (pop a) (pop b)) target)]
+           [(jvm/if_icmpne (target number?) (a any?) (b any?))
+            ("  if_icmpne L" target)
+            (goto-if (!= (pop a) (pop b)) target)]
            [(jvm/if_icmplt (target number?) (a any?) (b any?))
             ("  if_icmplt L" target)
-            (goto-if (< a b) target)]
+            (goto-if (< (pop a) (pop b)) target)]
            [(jvm/if_icmpgt (target number?) (a any?) (b any?))
             ("  if_icmpgt L" target)
-            (goto-if (> a b) target)]
+            (goto-if (> (pop a) (pop b)) target)]
            [(jvm/if_icmple (target number?) (a any?) (b any?))
             ("  if_icmple L" target)
-            (goto-if (<= a b) target)]
+            (goto-if (<= (pop a) (pop b)) target)]
            [(jvm/if_icmpge (target number?) (a any?) (b any?))
             ("  if_icmpge L" target)
-            (goto-if (>= a b) target)]
+            (goto-if (>= (pop a) (pop b)) target)]
            [(jvm/goto (target number?))
             ("  goto L" target)
             (goto target)]
