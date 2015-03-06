@@ -79,8 +79,8 @@
   (begin
     (reduction-calc (+ (a const?) (b const?)) (_) (wrap-const (+ a b)))
     (reduction-calc (* (a const?) (b const?)) (_) (wrap-const (* a b)))
+    (reduction-simple (+ (a const?) (b any?)) (+ b a))
     (reduction-simple (+ (a any?) (zero const-zero?)) a)
-    (reduction-simple (+ (zero const-zero?) (b any?)) b)
     (reduction-simple (- (a any?) (zero const-zero?)) a)
     (reduction-advanced (x any?) (generic/middle-of (generic/middle x)) x)
     (reduction-advanced (x any?) (rest pair?) (generic/middle-of (generic/middle x) . rest) x)

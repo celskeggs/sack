@@ -91,7 +91,8 @@
 ; Generate the replacement for the rule for element.
 (define (replace-rule rule cur-exports element)
   (let ((vars (match-rule rule element)))
-    (assert (equal? (get-sorted-var-names vars) (get-sorted-var-names (boxdag-rule-args rule))) "Failed to match all arguments in boxdag rule.")
+    (assert (equal? (get-sorted-var-names vars) (get-sorted-var-names (boxdag-rule-args rule)))
+            "Failed to match all arguments in boxdag rule:" rule)
     (apply-replacements vars cur-exports (boxdag-rule-repl rule))))
 ; Apply rule to the boxdag, just once.
 (provide replace-rule match-rule apply-replacements)
