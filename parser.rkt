@@ -5,7 +5,6 @@
 (provide parse parse-varcount default-simple-nodes)
 
 (define (parse-arg args)
-  (trace 'parse-arg args) ;(0 n u4)
   ; Note that enumerate adds a prefix to the arguments
   (assert (and (= (length args) 3) (number? (car args)) (symbol? (cadr args)) (symbol? (caddr args))) "Expected two symbols per argument.")
   (list (cadr args) (caddr args) 'arg (car args)))
@@ -22,7 +21,7 @@
                                                            args)))))
         args))
 
-(define default-simple-nodes '(<= >= < > == != + - * / %))
+(define default-simple-nodes '(<= >= < > == != + - * / % logical/and logical/or logical/not))
 
 (define (parse-expr-noded type args vars #:simple-nodes simple-nodes)
   (cond ((member type simple-nodes)
@@ -40,10 +39,11 @@
         ((number? tree) `(const ,tree u4))
         ((string? tree) `(const-string ,tree))
         ((symbol? tree) (if (assoc tree vars) (var-expr (assoc tree vars)) (error "No such variable:" tree)))
+        ((boolean? tree) `(const-boolean ,tree))
         (else (error "Cannot parse expression" tree))))
 
 (define (is-jumper tree)
-  (and (pair? tree) (member (car tree) '(if while))))
+  (and (pair? tree) (member (car tree) '(if while when unless))))
 
 (define (parse-stmt-list tree vars retexpr #:simple-nodes simple-nodes)
   (cond ((and (pair? tree) (pair? (car tree)) (eq? (caar tree) 'def))
@@ -60,26 +60,73 @@
         ((and (pair? tree) (empty? (cdr tree)))
          (parse-stmt (car tree) vars retexpr #:simple-nodes simple-nodes))))
 
+(define (parse-condition condition vars true false #:simple-nodes simple-nodes)
+  (cond [(and (pair? condition) (eq? (car condition) 'logical/and))
+         (if (empty? (cddr condition)) ; and of only one item
+             (parse-condition (second condition) vars true false #:simple-nodes simple-nodes)
+             (parse-condition (second condition) vars
+                              (make-placeholder (parse-condition (cons 'logical/and (cddr condition)) vars
+                                                                 true false #:simple-nodes simple-nodes))
+                              false
+                              #:simple-nodes simple-nodes))]
+        [(and (pair? condition) (eq? (car condition) 'logical/or))
+         (if (empty? (cddr condition)) ; or of only one item
+             (parse-condition (second condition) vars true false #:simple-nodes simple-nodes)
+             (parse-condition (second condition) vars
+                              true
+                              (make-placeholder (parse-condition (cons 'logical/or (cddr condition)) vars
+                                                                 true false #:simple-nodes simple-nodes))
+                              #:simple-nodes simple-nodes))]
+        [else
+         (list (list 'branch
+               (parse-expr condition vars #:simple-nodes simple-nodes)
+               true
+               false))]))
+
 (define (parse-stmt tree vars retexpr #:simple-nodes simple-nodes)
   (cond ((and (pair? tree) (eq? (first tree) 'if))
          (assert (= (length tree) 4) "if requires three arguments.")
-         (list (list 'branch
-                     (parse-expr (second tree) vars #:simple-nodes simple-nodes)
+         (parse-condition (second tree) vars
                      (make-placeholder (parse-stmt (third tree) vars retexpr #:simple-nodes simple-nodes))
-                     (make-placeholder (parse-stmt (fourth tree) vars retexpr #:simple-nodes simple-nodes)))))
+                     (make-placeholder (parse-stmt (fourth tree) vars retexpr #:simple-nodes simple-nodes))
+                     #:simple-nodes simple-nodes))
+        ((and (pair? tree) (eq? (first tree) 'when))
+         (assert (>= (length tree) 3) "when requires at least two arguments.")
+         (parse-condition (second tree) vars
+                          (make-placeholder (parse-stmt-list (cddr tree) vars retexpr #:simple-nodes simple-nodes))
+                          (let ((return-statement (filter-useless (retexpr '(parser/undefined)))))
+                            (if (and (= (length return-statement) 1) (= (length (car return-statement)) 2) (eq? (caar return-statement) 'goto))
+                                (cadar return-statement) ; go directly instead of gotoing to a goto block
+                                (make-placeholder return-statement)))
+                          #:simple-nodes simple-nodes))
+        ((and (pair? tree) (eq? (first tree) 'unless))
+         (assert (>= (length tree) 3) "unless requires at least two arguments.")
+         (parse-condition (second tree) vars
+                          (let ((return-statement (filter-useless (retexpr '(parser/undefined)))))
+                            (if (and (= (length return-statement) 1) (= (length (car return-statement)) 2) (eq? (caar return-statement) 'goto))
+                                (cadar return-statement) ; go directly instead of gotoing to a goto block
+                                (make-placeholder return-statement)))
+                          (make-placeholder (parse-stmt-list (cddr tree) vars retexpr #:simple-nodes simple-nodes))
+                          #:simple-nodes simple-nodes))
         ((and (pair? tree) (eq? (first tree) 'while))
-         (assert (>= (length tree) 1) "while requires at least one argument.")
+         (assert (>= (length tree) 2) "while requires at least one argument.")
          (let ((condition (make-placeholder (void)))
                (body (make-placeholder (void))))
-           (placeholder-set! condition (list (list 'branch
-                                                   (parse-expr (second tree) vars #:simple-nodes simple-nodes)
-                                                   body
-                                                   (let ((return-statement (filter-useless (retexpr '(parser/undefined)))))
-                                                     (if (and (= (length return-statement) 1) (= (length (car return-statement)) 2) (eq? (caar return-statement) 'goto))
-                                                         (cadar return-statement) ; go directly instead of gotoing to a goto block
-                                                         (make-placeholder return-statement))))))
+           (placeholder-set! condition (parse-condition (second tree) vars
+                                                        body
+                                                        (let ((return-statement (filter-useless (retexpr '(parser/undefined)))))
+                                                          (if (and (= (length return-statement) 1) (= (length (car return-statement)) 2) (eq? (caar return-statement) 'goto))
+                                                              (cadar return-statement) ; go directly instead of gotoing to a goto block
+                                                              (make-placeholder return-statement)))
+                                                        #:simple-nodes simple-nodes))
            (placeholder-set! body (parse-stmt-list (cddr tree) vars (lambda (retval) `((drop ,retval) (goto ,condition))) #:simple-nodes simple-nodes))
            (list (list 'goto condition))))
+        ((and (pair? tree) (eq? (first tree) 'begin))
+         (assert (>= (length tree) 2) "begin requires at least one argument.")
+         (let ((body (make-placeholder (void))))
+           (parse-stmt-list (cdr tree) vars retexpr #:simple-nodes simple-nodes)))
+        ((equal? tree '(pass))
+         (retexpr '(parser/undefined)))
         (else
          (retexpr (parse-expr tree vars #:simple-nodes simple-nodes)))))
 
