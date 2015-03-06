@@ -66,7 +66,7 @@
             (push (call-raw-n target . args))]
            [(tstk/jumpif (cond any?) (target number?))
             ("  (jumpif L." target ")")
-            (goto-if cond target)]
+            (goto-if (pop cond) target)]
            [(tstk/jump (target number?))
             ("  (jump L." target ")")
             (goto target)]

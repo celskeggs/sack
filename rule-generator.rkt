@@ -30,17 +30,21 @@
          empty)
         (else
          (case (car behavior)
-           ('get-reg
+           ((get-reg)
             (assert (= (length behavior) 2) "get-reg expects one argument")
             (assert (symbol? (second behavior)) "get-reg expects a symbol argument")
             (if (assoc (second behavior) (unbox arguments))
                 (second behavior)
-                (begin
-                  (set-box! arguments (cons (list (second behavior) any?) (unbox arguments)))
-                  (set-box! constraints (cons (cons (second behavior) (second behavior)) (unbox constraints)))
-                  (second behavior)
+                (let ((alt-name (string->symbol (string-append "_tvar_" (symbol->string (second behavior))))))
+                  (unless (assoc alt-name (unbox arguments))
+                    (set-box! arguments (cons (list alt-name any?) (unbox arguments)))
+                    (set-box! constraints (cons (cons alt-name (second behavior)) (unbox constraints))))
+                  alt-name
                   )))
-           ('pop
+           ((quote)
+            (assert (= (length behavior) 2) "quote expects one argument")
+            (second behavior))
+           ((pop)
             (assert (= (length behavior) 2) "pop expects one argument")
             (assert (symbol? (second behavior)) "pop expects a symbol argument")
             (let ((pop (assoc (second behavior) (unbox arguments))))
@@ -60,10 +64,13 @@
      (cons (second behavior) (map (curry convert-behavior-expr arguments constraints) (cddr behavior))))
     ('set-reg
      (assert (= (length behavior) 3) "set-reg expects two arguments")
-     (unless (assoc (second behavior) (unbox arguments))
-       (set-box! arguments (cons (list (second behavior) any?) (unbox arguments)))
-       (set-box! constraints (cons (cons (second behavior) (second behavior)) (unbox constraints))))
-     (set-box! returns (cons (second behavior) (unbox returns)))
+     (if (assoc (second behavior) (unbox arguments))
+         (set-box! returns (cons (second behavior) (unbox returns)))
+         (let ((alt-name (string->symbol (string-append "_tvar_" (symbol->string (second behavior))))))
+           (set-box! returns (cons alt-name (unbox returns)))
+           (unless (assoc alt-name (unbox arguments))
+             (set-box! arguments (cons (list alt-name any?) (unbox arguments)))
+             (set-box! constraints (cons (cons alt-name (second behavior)) (unbox constraints))))))
      (convert-behavior-expr arguments constraints (third behavior)))
     ('set-memory!
      (assert (= (length behavior) 3) "set-memory! expects two arguments")
@@ -81,10 +88,10 @@
      (list 'goto (second behavior)))
     ('goto-if
      (assert (= (length behavior) 3) "goto-if expects two arguments")
-     (list 'goto-if (second behavior) (third behavior)))
+     (list 'goto-if (convert-behavior-expr arguments constraints (second behavior)) (third behavior)))
     ('goto-if-not
      (assert (= (length behavior) 3) "goto-if-not expects two arguments")
-     (list 'goto-if-not (second behavior) (third behavior)))
+     (list 'goto-if-not (convert-behavior-expr arguments constraints (second behavior)) (third behavior)))
     (else (error "Unexpected behavior type" (car behavior)))))
 
 (define (check-used-in zone arg-pair)
